@@ -35,6 +35,10 @@ class MainActivity : ComponentActivity() {
         if (granted) viewModel.onPermissionsGranted()
     }
 
+    private val precisePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* granted or denied — CA listener will work if granted */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -44,7 +48,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        // Auto-request if not granted
+        // Auto-request core permissions
         if (!hasAllPermissions()) {
             permissionLauncher.launch(
                 arrayOf(
@@ -54,6 +58,13 @@ class MainActivity : ComponentActivity() {
             )
         } else {
             viewModel.onPermissionsGranted()
+        }
+        // Request READ_PRECISE_PHONE_STATE for PhysicalChannelConfig CA data (Android 12+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
+            checkSelfPermission(Manifest.permission.READ_PRECISE_PHONE_STATE) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            precisePermissionLauncher.launch(Manifest.permission.READ_PRECISE_PHONE_STATE)
         }
     }
 

@@ -44,7 +44,7 @@ object Formatters {
             val ssNrState = nrStateSafe(serviceState)
             if (ssNrState == 3) return "5G NSA"
 
-            // Fallback: reflect per-registration NR state (covers Samsung OEM variants)
+            // Fallback 1: reflect getNrState() on the PS registration (Samsung OEM variants)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val nsaViaReg = try {
                     serviceState.networkRegistrationInfoList
@@ -55,6 +55,16 @@ object Formatters {
                         }
                 } catch (e: Throwable) { false }
                 if (nsaViaReg) return "5G NSA"
+            }
+
+            // Fallback 2: any NR entry in registration list (public API, no reflection)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val hasNrEntry = try {
+                    serviceState.networkRegistrationInfoList.any { reg ->
+                        reg.accessNetworkTechnology == TelephonyManager.NETWORK_TYPE_NR
+                    }
+                } catch (e: Throwable) { false }
+                if (hasNrEntry) return "5G NSA"
             }
 
             if (ssNrState == 2) return "4G (5G ready)"
