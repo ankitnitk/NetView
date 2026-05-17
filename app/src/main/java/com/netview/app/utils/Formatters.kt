@@ -4,6 +4,7 @@ import android.telephony.CellInfo
 import android.telephony.NetworkRegistrationInfo
 import android.telephony.ServiceState
 import android.telephony.TelephonyManager
+import android.os.Build
 
 object Formatters {
 
@@ -34,21 +35,32 @@ object Formatters {
         else -> "Unknown"
     }
 
-    /**
-     * Detect NSA vs SA vs LTE based on serviceState NR fields.
-     */
     fun radioMode(dataType: Int, serviceState: ServiceState?): String {
         val baseType = networkTypeName(dataType)
-        if (baseType != "5G" && serviceState == null) return baseType
 
-        val nrState = nrStateSafe(serviceState)
-        // ServiceState.NRSTATE_CONNECTED == 3 on most builds
-        return when {
-            baseType == "5G" -> "5G SA"
-            dataType == TelephonyManager.NETWORK_TYPE_LTE && nrState == 3 -> "5G NSA"
-            baseType == "4G" && nrState == 2 -> "4G (5G ready)" // NRSTATE_NOT_RESTRICTED
-            else -> baseType
+        if (dataType == TelephonyManager.NETWORK_TYPE_NR) return "5G SA"
+
+        if (dataType == TelephonyManager.NETWORK_TYPE_LTE && serviceState != null) {
+            val ssNrState = nrStateSafe(serviceState)
+            if (ssNrState == 3) return "5G NSA"
+
+            // Fallback: reflect per-registration NR state (covers Samsung OEM variants)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val nsaViaReg = try {
+                    serviceState.networkRegistrationInfoList
+                        .filter { it.domain == NetworkRegistrationInfo.DOMAIN_PS }
+                        .any { reg ->
+                            val m = reg.javaClass.getMethod("getNrState")
+                            (m.invoke(reg) as? Int) == 3
+                        }
+                } catch (e: Throwable) { false }
+                if (nsaViaReg) return "5G NSA"
+            }
+
+            if (ssNrState == 2) return "4G (5G ready)"
         }
+
+        return baseType
     }
 
     private fun nrStateSafe(ss: ServiceState?): Int {

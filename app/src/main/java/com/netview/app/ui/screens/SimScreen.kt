@@ -67,13 +67,15 @@ fun SimScreen(
             when (c.rat) {
                 "LTE" -> {
                     rows += "eNB ID" to Formatters.longOrDash(c.enbId)
-                    rows += "Sector ID" to Formatters.intOrDash(c.sectorId)
+                    rows += "LCR ID" to Formatters.intOrDash(c.sectorId)
                     rows += "Cell ID (CID)" to Formatters.longOrDash(c.cellId)
                     rows += "PCI" to Formatters.intOrDash(c.pci)
                     rows += "TAC" to Formatters.intOrDash(c.tac)
                     rows += "EARFCN" to Formatters.intOrDash(c.earfcn)
                     rows += "Band" to Formatters.stringOrDash(c.band)
-                    rows += "Bandwidth" to (c.bandwidthMhz?.let { "$it MHz" } ?: "—")
+                    val bw = c.bandwidthMhz
+                        ?: sim.carrierAggregation.firstOrNull { it.role == "PCell" }?.bandwidthMhz
+                    rows += "Bandwidth" to (bw?.let { "%.1f MHz".format(it) } ?: "—")
                 }
                 "NR" -> {
                     rows += "gNB ID" to Formatters.longOrDash(c.gnbId)

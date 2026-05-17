@@ -44,6 +44,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 delay(refreshSeconds * 1000L)
             }
         }
+        // Re-read sims immediately whenever the CA callback fires
+        viewModelScope.launch {
+            telephonyRepo.caFlow.collect { if (telephonyRepo.hasPermissions()) refresh() }
+        }
     }
 
     fun onPermissionsGranted() {
