@@ -33,6 +33,12 @@ class TelephonyRepository(private val context: Context) {
     private val _caFlow = MutableStateFlow<Map<Int, List<CarrierComponent>>>(emptyMap())
     val caFlow: StateFlow<Map<Int, List<CarrierComponent>>> = _caFlow
 
+    fun hasPrecisePermission(): Boolean =
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) true
+        else ContextCompat.checkSelfPermission(
+            context, Manifest.permission.READ_PRECISE_PHONE_STATE
+        ) == PackageManager.PERMISSION_GRANTED
+
     /** Check the two runtime permissions we need. */
     fun hasPermissions(): Boolean {
         val phone = ContextCompat.checkSelfPermission(
@@ -90,10 +96,9 @@ class TelephonyRepository(private val context: Context) {
             else -> "CS"
         }
 
-        val cachedCa = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            caCache[sub.subscriptionId] else null
-        val ca = if (!cachedCa.isNullOrEmpty()) cachedCa
-                 else detectCaFromCellInfo(cellInfos)
+        val ca = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            caCache[sub.subscriptionId] ?: emptyList()
+        else emptyList()
 
         return SimSlotData(
             subId = sub.subscriptionId,

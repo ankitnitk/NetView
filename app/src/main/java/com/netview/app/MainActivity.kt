@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
 
     private val precisePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* granted or denied — CA listener will work if granted */ }
+    ) { viewModel.onPrecisePermissionResult() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
         val sims by viewModel.sims.collectAsState()
         val location by viewModel.location.collectAsState()
         val permissionsGranted by viewModel.permissionsGranted.collectAsState()
+        val hasPrecisePermission by viewModel.hasPrecisePermission.collectAsState()
         val refresh by viewModel.refreshSecondsFlow.collectAsState(initial = SettingsRepository.DEFAULT_REFRESH)
 
         NavHost(navController = nav, startDestination = "main") {
@@ -88,6 +89,7 @@ class MainActivity : ComponentActivity() {
                     sims = sims,
                     location = location,
                     permissionsGranted = permissionsGranted,
+                    hasPrecisePermission = hasPrecisePermission,
                     onRequestPermissions = {
                         permissionLauncher.launch(
                             arrayOf(

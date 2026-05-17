@@ -20,6 +20,7 @@ import com.netview.app.utils.Formatters
 fun SimScreen(
     sim: SimSlotData,
     location: LocationData?,
+    hasPrecisePermission: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -147,9 +148,13 @@ fun SimScreen(
             }
             InfoCard(title = "Carrier Aggregation", rows = rows)
         } else {
+            val caMsg = if (!hasPrecisePermission)
+                "Grant 'Precise phone state' permission"
+            else
+                "None detected"
             InfoCard(
                 title = "Carrier Aggregation",
-                rows = listOf("CA Status" to "None / Not available")
+                rows = listOf("CA Status" to caMsg)
             )
         }
 
