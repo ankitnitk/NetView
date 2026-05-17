@@ -32,9 +32,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val refreshSecondsFlow = settingsRepo.refreshSeconds
 
-    private val _hasPrecisePermission = MutableStateFlow(telephonyRepo.hasPrecisePermission())
-    val hasPrecisePermission: StateFlow<Boolean> = _hasPrecisePermission.asStateFlow()
-
     private var refreshSeconds = SettingsRepository.DEFAULT_REFRESH
 
     init {
@@ -47,7 +44,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 delay(refreshSeconds * 1000L)
             }
         }
-        // Re-read sims immediately whenever the CA callback fires
+        // Re-read sims immediately when PhysicalChannelConfig callback fires (CA data)
         viewModelScope.launch {
             telephonyRepo.caFlow.collect { if (telephonyRepo.hasPermissions()) refresh() }
         }
@@ -55,13 +52,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onPermissionsGranted() {
         _permissionsGranted.value = true
-        _hasPrecisePermission.value = telephonyRepo.hasPrecisePermission()
         locationRepo.start()
-        refresh()
-    }
-
-    fun onPrecisePermissionResult() {
-        _hasPrecisePermission.value = telephonyRepo.hasPrecisePermission()
         refresh()
     }
 

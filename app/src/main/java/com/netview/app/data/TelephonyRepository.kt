@@ -12,7 +12,6 @@ import com.netview.app.utils.Formatters
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.concurrent.Executor
-import java.util.concurrent.Executors
 
 /**
  * Reads cell + telephony state for every active SIM.
@@ -25,8 +24,8 @@ class TelephonyRepository(private val context: Context) {
     private val subscriptionManager: SubscriptionManager =
         context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
 
-    // For Android 12+ PhysicalChannelConfig callbacks
-    private val executor: Executor = Executors.newSingleThreadExecutor()
+    // For Android 12+ PhysicalChannelConfig callbacks — main executor avoids Samsung threading quirks
+    private val executor: Executor = ContextCompat.getMainExecutor(context)
     private val caCache = mutableMapOf<Int, List<CarrierComponent>>()
     private val callbacks = mutableMapOf<Int, TelephonyCallback>()
 
@@ -79,12 +78,20 @@ class TelephonyRepository(private val context: Context) {
         val cellInfos = try { tm.allCellInfo ?: emptyList() } catch (e: Exception) { emptyList() }
         val serving = parseServingCell(cellInfos)
 
-        // NSA: modem reports LTE as data RAT but also surfaces a CellInfoNr entry
+        // NSA primary: CellInfoNr in allCellInfo (may need READ_PRECISE_PHONE_STATE on some builds)
         val hasNrCell = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
                 cellInfos.any { it is CellInfoNr }
+        // NSA fallback: NR component in SignalStrength (only needs READ_PHONE_STATE — always works)
+        val hasNrSignal = !hasNrCell && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                try {
+                    tm.signalStrength?.cellSignalStrengths?.any { sig ->
+                        sig is CellSignalStrengthNr &&
+                                (sig as CellSignalStrengthNr).ssRsrp != CellInfo.UNAVAILABLE
+                    } ?: false
+                } catch (e: Exception) { false }
         val networkType = when {
             dataType == TelephonyManager.NETWORK_TYPE_NR -> "5G SA"
-            hasNrCell && dataType == TelephonyManager.NETWORK_TYPE_LTE -> "5G NSA"
+            (hasNrCell || hasNrSignal) && dataType == TelephonyManager.NETWORK_TYPE_LTE -> "5G NSA"
             else -> Formatters.radioMode(dataType, serviceState)
         }
 
@@ -100,13 +107,18 @@ class TelephonyRepository(private val context: Context) {
             caCache[sub.subscriptionId] ?: emptyList()
         else emptyList()
 
+        // Serving network PLMN — use ServiceState.operatorNumeric, not home SIM (critical for roaming)
+        val operatorNumeric = serviceState?.operatorNumeric?.takeIf { it.length >= 5 }
+        val servingMcc = operatorNumeric?.take(3)
+        val servingMnc = operatorNumeric?.drop(3)
+
         return SimSlotData(
             subId = sub.subscriptionId,
             slotIndex = sub.simSlotIndex,
             displayName = sub.displayName?.toString() ?: "SIM ${sub.simSlotIndex + 1}",
             carrierName = sub.carrierName?.toString() ?: "—",
-            mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) sub.mccString else sub.mcc.toString(),
-            mnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) sub.mncString else sub.mnc.toString(),
+            mcc = servingMcc ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) sub.mccString else sub.mcc.toString(),
+            mnc = servingMnc ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) sub.mncString else sub.mnc.toString(),
             isRoaming = tm.isNetworkRoaming,
             networkType = networkType,
             voiceTech = voiceTech,
@@ -296,7 +308,13 @@ class TelephonyRepository(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     private fun ensureCaListener(subId: Int) {
-        if (callbacks.containsKey(subId)) return
+        // Keep if registered AND callback has already fired (cache has an entry)
+        if (callbacks.containsKey(subId) && caCache.containsKey(subId)) return
+        // Previously registered but callback never fired — unregister and retry
+        callbacks.remove(subId)?.let { old ->
+            try { telephonyManager.createForSubscriptionId(subId).unregisterTelephonyCallback(old) }
+            catch (e: Exception) { /* ignore */ }
+        }
         val tm = telephonyManager.createForSubscriptionId(subId)
 
         val cb = object : TelephonyCallback(), TelephonyCallback.PhysicalChannelConfigListener {

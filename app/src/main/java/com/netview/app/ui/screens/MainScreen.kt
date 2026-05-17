@@ -20,7 +20,6 @@ fun MainScreen(
     sims: List<SimSlotData>,
     location: LocationData?,
     permissionsGranted: Boolean,
-    hasPrecisePermission: Boolean,
     onRequestPermissions: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -66,7 +65,7 @@ fun MainScreen(
             }
 
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                SimScreen(sim = sims[page], location = location, hasPrecisePermission = hasPrecisePermission)
+                SimScreen(sim = sims[page], location = location)
             }
         }
     }

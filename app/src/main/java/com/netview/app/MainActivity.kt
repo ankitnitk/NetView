@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -35,9 +32,10 @@ class MainActivity : ComponentActivity() {
         if (granted) viewModel.onPermissionsGranted()
     }
 
+    // Request READ_PRECISE_PHONE_STATE separately — needed for PhysicalChannelConfig (CA/BW)
     private val precisePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { viewModel.onPrecisePermissionResult() }
+    ) { viewModel.refresh() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,7 +46,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        // Auto-request core permissions
         if (!hasAllPermissions()) {
             permissionLauncher.launch(
                 arrayOf(
@@ -59,7 +56,6 @@ class MainActivity : ComponentActivity() {
         } else {
             viewModel.onPermissionsGranted()
         }
-        // Request READ_PRECISE_PHONE_STATE for PhysicalChannelConfig CA data (Android 12+)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
             checkSelfPermission(Manifest.permission.READ_PRECISE_PHONE_STATE) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -69,8 +65,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hasAllPermissions(): Boolean {
-        val phone = checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        val loc = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val phone = checkSelfPermission(Manifest.permission.READ_PHONE_STATE) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        val loc = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
         return phone && loc
     }
 
@@ -80,7 +78,6 @@ class MainActivity : ComponentActivity() {
         val sims by viewModel.sims.collectAsState()
         val location by viewModel.location.collectAsState()
         val permissionsGranted by viewModel.permissionsGranted.collectAsState()
-        val hasPrecisePermission by viewModel.hasPrecisePermission.collectAsState()
         val refresh by viewModel.refreshSecondsFlow.collectAsState(initial = SettingsRepository.DEFAULT_REFRESH)
 
         NavHost(navController = nav, startDestination = "main") {
@@ -89,7 +86,6 @@ class MainActivity : ComponentActivity() {
                     sims = sims,
                     location = location,
                     permissionsGranted = permissionsGranted,
-                    hasPrecisePermission = hasPrecisePermission,
                     onRequestPermissions = {
                         permissionLauncher.launch(
                             arrayOf(
