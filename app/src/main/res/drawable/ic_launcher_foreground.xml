@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Signal bars (ascending) centered in the 66x66 safe zone (centered at 54,54) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M38,70 h7 v6 h-7 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M49,62 h7 v14 h-7 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M60,52 h7 v24 h-7 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M71,40 h7 v36 h-7 z" />
+</vector>
