@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.telephony.*
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.netview.app.utils.BandMapper
 import com.netview.app.utils.Formatters
@@ -314,10 +315,11 @@ class TelephonyRepository(private val context: Context) {
     /**
      * Try the hidden synchronous TelephonyManager.getPhysicalChannelConfigs() via reflection.
      * On some Samsung builds this works even when the callback-based API silently fails.
+     * PhysicalChannelConfig public API is S+; skip on older devices.
      */
     @Suppress("UNCHECKED_CAST")
     private fun parsePhysicalChannelsViaReflection(tm: TelephonyManager): List<CarrierComponent> {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return emptyList()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return emptyList()
         val configs: List<PhysicalChannelConfig> = try {
             val m = tm.javaClass.getMethod("getPhysicalChannelConfigs")
             (m.invoke(tm) as? List<PhysicalChannelConfig>) ?: emptyList()
@@ -326,6 +328,7 @@ class TelephonyRepository(private val context: Context) {
         return configs.mapIndexed { idx, cfg -> physicalChannelToCarrier(idx, cfg) }
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
     private fun physicalChannelToCarrier(idx: Int, cfg: PhysicalChannelConfig): CarrierComponent {
         val bwKhz = cfg.cellBandwidthDownlinkKhz
         val role = when (cfg.connectionStatus) {
@@ -333,11 +336,15 @@ class TelephonyRepository(private val context: Context) {
             PhysicalChannelConfig.CONNECTION_SECONDARY_SERVING -> "SCell"
             else -> "—"
         }
-        val rank = try { cfg.rank.takeIf { it > 0 } } catch (e: Throwable) { null }
+        // getRank() may be hidden on some builds; reflect it.
+        val rank = try {
+            val m = cfg.javaClass.getMethod("getRank")
+            (m.invoke(cfg) as? Int)?.takeIf { it > 0 }
+        } catch (e: Throwable) { null }
         return CarrierComponent(
             index = idx,
             role = role,
-            band = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "Band ${cfg.band}" else null,
+            band = "Band ${cfg.band}",
             bandwidthMhz = if (bwKhz > 0) bwKhz / 1000.0 else null,
             pci = cfg.physicalCellId.takeIf { it >= 0 },
             earfcn = cfg.downlinkChannelNumber.takeIf { it > 0 },
