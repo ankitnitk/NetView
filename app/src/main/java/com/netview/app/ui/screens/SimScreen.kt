@@ -214,6 +214,12 @@ fun SimScreen(
                 val mimo = cc.mimoLayers?.let { " • ${it}L MIMO" } ?: ""
                 rows += "CC${cc.index + 1} (${cc.role})" to
                         "${cc.band ?: "—"}$bw • PCI ${Formatters.intOrDash(cc.pci)}$mimo$freq"
+                val sigParts = buildList {
+                    cc.rsrp?.let { add("${it} dBm") }
+                    cc.rsrq?.let { add("RSRQ $it dB") }
+                    cc.rssnr?.let { add("SNR $it dB") }
+                }
+                if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
             }
             InfoCard(title = "Carrier Aggregation", rows = rows)
         } else if (ratIsLteOrNr) {

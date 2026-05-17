@@ -3,6 +3,12 @@ package com.netview.app.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,6 +49,7 @@ fun DebugLogScreen(onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    TextButton(onClick = { exportLog(ctx, DebugLog.snapshot()) }) { Text("Export") }
                     TextButton(onClick = {
                         copyToClipboard(ctx, DebugLog.snapshot())
                         scope.launch { snackbarHostState.showSnackbar("Copied to clipboard") }
@@ -81,4 +88,20 @@ fun DebugLogScreen(onBack: () -> Unit) {
 private fun copyToClipboard(ctx: Context, text: String) {
     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     cm.setPrimaryClip(ClipData.newPlainText("NetView log", text))
+}
+
+private fun exportLog(ctx: Context, text: String) {
+    try {
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val file = File(ctx.cacheDir, "netview_log_$stamp.txt")
+        file.writeText(text)
+        val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "NetView Debug Log $stamp")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        ctx.startActivity(Intent.createChooser(intent, "Export debug log"))
+    } catch (_: Exception) { }
 }

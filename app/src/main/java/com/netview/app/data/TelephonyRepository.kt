@@ -109,6 +109,7 @@ class TelephonyRepository(private val context: Context) {
                 }
             } catch (e: Exception) { /* ignore */ }
         }
+        logDiagnostics(sub.subscriptionId, tm, serviceState, cellInfos, signalStrengths)
 
         // NSA primary: CellInfoNr in allCellInfo (may need READ_PRECISE_PHONE_STATE on some builds)
         val nrCellInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
@@ -181,10 +182,10 @@ class TelephonyRepository(private val context: Context) {
             caCache[sub.subscriptionId] ?: emptyList() else emptyList()
         val direct = if (cached.isEmpty()) parsePhysicalChannelsViaReflection(tm) else emptyList()
         val fromSs = if (cached.isEmpty() && direct.isEmpty())
-            buildCaFromBandwidths(ssBws, servingEnriched) else emptyList()
+            buildCaFromBandwidths(ssBws, servingEnriched, cellInfos) else emptyList()
         val ca = when {
-            cached.isNotEmpty() -> cached
-            direct.isNotEmpty() -> direct
+            cached.isNotEmpty() -> enrichCaWithSignal(cached, cellInfos)
+            direct.isNotEmpty() -> enrichCaWithSignal(direct, cellInfos)
             fromSs.isNotEmpty() -> fromSs
             else -> detectCaFromCellInfo(cellInfos)
         }
@@ -537,17 +538,26 @@ class TelephonyRepository(private val context: Context) {
         if (uniqueEarfcns.size < 2) return emptyList()  // same band = sectors, not CA
         return sameEnb.mapIndexed { idx, cell ->
             val id = cell.cellIdentity
+            val sig = cell.cellSignalStrength
             val earfcn = id.earfcn.takeIf { it != CellInfo.UNAVAILABLE }
             val bwKhz = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.bandwidth
                         else CellInfo.UNAVAILABLE
+            val band = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && id.bands.isNotEmpty())
+                "B${id.bands.first()}" else BandMapper.lteBand(earfcn)
             CarrierComponent(
                 index = idx,
                 role = if (cell.isRegistered && idx == 0) "PCell" else "SCell",
-                band = BandMapper.lteBand(earfcn),
+                band = band,
                 bandwidthMhz = if (bwKhz > 0 && bwKhz != CellInfo.UNAVAILABLE) bwKhz / 1000.0 else null,
                 pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE },
                 earfcn = earfcn,
-                downlinkFrequencyMhz = null
+                downlinkFrequencyMhz = null,
+                rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE },
+                rsrq = sig.rsrq.takeIf { it != CellInfo.UNAVAILABLE },
+                rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    sig.rssnr.takeIf { it != CellInfo.UNAVAILABLE } else null,
+                cqi = sig.cqi.takeIf { it != CellInfo.UNAVAILABLE },
+                timingAdvance = sig.timingAdvance.takeIf { it != CellInfo.UNAVAILABLE }
             )
         }
     }
@@ -739,20 +749,61 @@ class TelephonyRepository(private val context: Context) {
      */
     private fun buildCaFromBandwidths(
         bws: List<Int>,
-        serving: ServingCellInfo?
+        serving: ServingCellInfo?,
+        cellInfos: List<CellInfo>
     ): List<CarrierComponent> {
-        if (bws.size < 2) return emptyList()  // only show as CA when >1 carrier
+        if (bws.size < 2) return emptyList()
+        // Non-registered LTE cells on a different EARFCN than the PCell are SCell candidates.
+        val scellCandidates: MutableList<CellInfoLte> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            cellInfos.filterIsInstance<CellInfoLte>()
+                .filter { !it.isRegistered }
+                .filter {
+                    val e = it.cellIdentity.earfcn
+                    e != CellInfo.UNAVAILABLE && e > 0 && e != (serving?.earfcn ?: -1)
+                }
+                .toMutableList()
+        } else mutableListOf()
+
         return bws.mapIndexed { idx, bwKhz ->
-            CarrierComponent(
-                index = idx,
-                role = if (idx == 0) "PCell" else "SCell",
-                band = if (idx == 0) serving?.band else null,
-                bandwidthMhz = bwKhz / 1000.0,
-                pci = if (idx == 0) serving?.pci else null,
-                earfcn = if (idx == 0) serving?.earfcn else null,
-                downlinkFrequencyMhz = null,
-                mimoLayers = null
-            )
+            if (idx == 0) {
+                CarrierComponent(
+                    index = 0, role = "PCell",
+                    band = serving?.band, bandwidthMhz = bwKhz / 1000.0,
+                    pci = serving?.pci, earfcn = serving?.earfcn,
+                    downlinkFrequencyMhz = null,
+                    rsrp = serving?.rsrp, rsrq = serving?.rsrq, rssnr = serving?.rssnr,
+                    cqi = serving?.cqi, timingAdvance = serving?.timingAdvance
+                )
+            } else {
+                // Match by bandwidth first (avoids wrong assignment when SCells differ in BW);
+                // fall back to next available candidate when BW is identical across SCells.
+                val byBw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                    scellCandidates.firstOrNull { it.cellIdentity.bandwidth == bwKhz } else null
+                val candidate = byBw ?: scellCandidates.firstOrNull()
+                if (candidate != null) scellCandidates.remove(candidate)
+
+                val earfcn = candidate?.let {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                        it.cellIdentity.earfcn.takeIf { e -> e != CellInfo.UNAVAILABLE } else null
+                }
+                val pci = candidate?.cellIdentity?.pci?.takeIf { it != CellInfo.UNAVAILABLE }
+                val sig = candidate?.cellSignalStrength
+                val band = candidate?.let {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && it.cellIdentity.bands.isNotEmpty())
+                        "B${it.cellIdentity.bands.first()}" else BandMapper.lteBand(earfcn)
+                }
+                CarrierComponent(
+                    index = idx, role = "SCell",
+                    band = band, bandwidthMhz = bwKhz / 1000.0,
+                    pci = pci, earfcn = earfcn, downlinkFrequencyMhz = null,
+                    rsrp = sig?.rsrp?.takeIf { it != CellInfo.UNAVAILABLE },
+                    rsrq = sig?.rsrq?.takeIf { it != CellInfo.UNAVAILABLE },
+                    rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                        sig?.rssnr?.takeIf { it != CellInfo.UNAVAILABLE } else null,
+                    cqi = sig?.cqi?.takeIf { it != CellInfo.UNAVAILABLE },
+                    timingAdvance = sig?.timingAdvance?.takeIf { it != CellInfo.UNAVAILABLE }
+                )
+            }
         }
     }
 
@@ -774,5 +825,189 @@ class TelephonyRepository(private val context: Context) {
                 else -> null
             }
         } catch (e: Throwable) { null }
+    }
+
+    /**
+     * Enrich CA components from PCC callback / reflection path with signal from allCellInfo,
+     * matched by PCI. CellInfo entries report per-CC signal on some Samsung builds.
+     */
+    private fun enrichCaWithSignal(ca: List<CarrierComponent>, cellInfos: List<CellInfo>): List<CarrierComponent> {
+        if (ca.isEmpty()) return ca
+        val lteByPci = cellInfos.filterIsInstance<CellInfoLte>()
+            .filter { it.cellIdentity.pci != CellInfo.UNAVAILABLE }
+            .associateBy { it.cellIdentity.pci }
+        return ca.map { cc ->
+            val cell = cc.pci?.let { lteByPci[it] } ?: return@map cc
+            val sig = cell.cellSignalStrength
+            cc.copy(
+                rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE },
+                rsrq = sig.rsrq.takeIf { it != CellInfo.UNAVAILABLE },
+                rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    sig.rssnr.takeIf { it != CellInfo.UNAVAILABLE } else null,
+                cqi = sig.cqi.takeIf { it != CellInfo.UNAVAILABLE },
+                timingAdvance = sig.timingAdvance.takeIf { it != CellInfo.UNAVAILABLE }
+            )
+        }
+    }
+
+    /** Dump everything the modem is reporting to the debug log for field analysis. */
+    @SuppressLint("MissingPermission")
+    private fun logDiagnostics(
+        subId: Int,
+        tm: TelephonyManager,
+        ss: ServiceState?,
+        cellInfos: List<CellInfo>,
+        signalStrengths: List<CellSignalStrength>
+    ) {
+        if (!DebugLog.enabled) return
+
+        // Network type summary
+        val dataType = try { tm.dataNetworkType } catch (e: Exception) { TelephonyManager.NETWORK_TYPE_UNKNOWN }
+        val voiceType = try { tm.voiceNetworkType } catch (e: Exception) { TelephonyManager.NETWORK_TYPE_UNKNOWN }
+        DebugLog.d("NET", "sub=$subId data=${networkTypeName(dataType)} voice=${networkTypeName(voiceType)} roaming=${tm.isNetworkRoaming}")
+
+        // All CellInfo — registered AND unregistered neighbors
+        DebugLog.d("CI", "sub=$subId total=${cellInfos.size}")
+        cellInfos.forEachIndexed { i, cell ->
+            when {
+                cell is CellInfoLte -> {
+                    val id = cell.cellIdentity
+                    val sig = cell.cellSignalStrength
+                    val earfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) id.earfcn else -1
+                    val bw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.bandwidth else -1
+                    val bands = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) id.bands.toString() else "n/a"
+                    val rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) sig.rssnr else Int.MIN_VALUE
+                    val rssi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) sig.rssi else Int.MIN_VALUE
+                    DebugLog.d("CI", "[$i]LTE reg=${cell.isRegistered} ci=${id.ci} pci=${id.pci} tac=${id.tac} earfcn=$earfcn bw=${bw}kHz bands=$bands")
+                    DebugLog.d("CI", "[$i]LTE rsrp=${sig.rsrp} rsrq=${sig.rsrq} rssnr=$rssnr cqi=${sig.cqi} ta=${sig.timingAdvance} rssi=$rssi lvl=${sig.level}")
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && cell is CellInfoNr -> {
+                    val id = cell.cellIdentity as? CellIdentityNr ?: return@forEachIndexed
+                    val sig = cell.cellSignalStrength as? CellSignalStrengthNr ?: return@forEachIndexed
+                    val bands = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) id.bands.toString() else "n/a"
+                    DebugLog.d("CI", "[$i]NR reg=${cell.isRegistered} nci=${id.nci} pci=${id.pci} tac=${id.tac} nrarfcn=${id.nrarfcn} bands=$bands")
+                    DebugLog.d("CI", "[$i]NR ssRsrp=${sig.ssRsrp} ssRsrq=${sig.ssRsrq} ssSinr=${sig.ssSinr} csiRsrp=${sig.csiRsrp} csiRsrq=${sig.csiRsrq} csiSinr=${sig.csiSinr}")
+                }
+                cell is CellInfoWcdma -> {
+                    val id = cell.cellIdentity
+                    val sig = cell.cellSignalStrength
+                    val uarfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) id.uarfcn else -1
+                    val ecNo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        try { sig.ecNo } catch (e: Throwable) { Int.MIN_VALUE }
+                    } else Int.MIN_VALUE
+                    DebugLog.d("CI", "[$i]WCDMA reg=${cell.isRegistered} cid=${id.cid} psc=${id.psc} lac=${id.lac} uarfcn=$uarfcn dbm=${sig.dbm} ecNo=$ecNo")
+                }
+                cell is CellInfoGsm -> {
+                    val id = cell.cellIdentity
+                    val sig = cell.cellSignalStrength
+                    val arfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) id.arfcn else -1
+                    DebugLog.d("CI", "[$i]GSM reg=${cell.isRegistered} cid=${id.cid} lac=${id.lac} arfcn=$arfcn bsic=${id.bsic} dbm=${sig.dbm} ta=${sig.timingAdvance}")
+                }
+                else -> DebugLog.d("CI", "[$i]${cell.javaClass.simpleName} reg=${cell.isRegistered}")
+            }
+        }
+
+        // Structured per-RAT signal strengths
+        DebugLog.d("SS2", "sub=$subId count=${signalStrengths.size}")
+        signalStrengths.forEachIndexed { i, sig ->
+            when {
+                sig is CellSignalStrengthLte -> {
+                    val rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) sig.rssnr else Int.MIN_VALUE
+                    val rssi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) sig.rssi else Int.MIN_VALUE
+                    DebugLog.d("SS2", "[$i]LTE rsrp=${sig.rsrp} rsrq=${sig.rsrq} rssnr=$rssnr cqi=${sig.cqi} ta=${sig.timingAdvance} rssi=$rssi lvl=${sig.level}")
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && sig is CellSignalStrengthNr -> {
+                    DebugLog.d("SS2", "[$i]NR ssRsrp=${sig.ssRsrp} ssRsrq=${sig.ssRsrq} ssSinr=${sig.ssSinr} csiRsrp=${sig.csiRsrp} csiRsrq=${sig.csiRsrq} csiSinr=${sig.csiSinr} lvl=${sig.level}")
+                }
+                sig is CellSignalStrengthWcdma -> {
+                    val ecNo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        try { sig.ecNo } catch (e: Throwable) { Int.MIN_VALUE }
+                    } else Int.MIN_VALUE
+                    DebugLog.d("SS2", "[$i]WCDMA dbm=${sig.dbm} ecNo=$ecNo lvl=${sig.level}")
+                }
+                sig is CellSignalStrengthGsm -> {
+                    DebugLog.d("SS2", "[$i]GSM dbm=${sig.dbm} ta=${sig.timingAdvance} ber=${sig.bitErrorRate} lvl=${sig.level}")
+                }
+                else -> DebugLog.d("SS2", "[$i]${sig.javaClass.simpleName} lvl=${sig.level}")
+            }
+        }
+
+        // NetworkRegistrationInfo — per-domain, per-transport breakdown
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && ss != null) {
+            try {
+                ss.networkRegistrationInfoList.forEachIndexed { i, reg ->
+                    val domain = when (reg.domain) {
+                        NetworkRegistrationInfo.DOMAIN_CS -> "CS"
+                        NetworkRegistrationInfo.DOMAIN_PS -> "PS"
+                        else -> "?(${reg.domain})"
+                    }
+                    val transport = when (reg.transportType) {
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN -> "WWAN"
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN -> "WLAN"
+                        else -> "?(${reg.transportType})"
+                    }
+                    val tech = networkTypeName(reg.accessNetworkTechnology)
+                    val state = reg.registrationState
+                    val plmn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        try { reg.registeredPlmn ?: "null" } catch (e: Throwable) { "err" }
+                    } else "n/a"
+                    DebugLog.d("NRI", "[$i] domain=$domain transport=$transport tech=$tech state=$state plmn=$plmn")
+                    val cellId = reg.cellIdentity
+                    when {
+                        cellId is CellIdentityLte -> {
+                            val earfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) cellId.earfcn else -1
+                            val bands = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) cellId.bands.toString() else "n/a"
+                            DebugLog.d("NRI", "[$i] LTE ci=${cellId.ci} pci=${cellId.pci} tac=${cellId.tac} earfcn=$earfcn bands=$bands")
+                        }
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && cellId is CellIdentityNr -> {
+                            val bands = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) cellId.bands.toString() else "n/a"
+                            DebugLog.d("NRI", "[$i] NR nci=${cellId.nci} pci=${cellId.pci} tac=${cellId.tac} nrarfcn=${cellId.nrarfcn} bands=$bands")
+                        }
+                        cellId != null -> DebugLog.d("NRI", "[$i] ${cellId.javaClass.simpleName}")
+                        else -> DebugLog.d("NRI", "[$i] cellIdentity=null")
+                    }
+                }
+            } catch (e: Exception) { DebugLog.w("NRI", "failed: ${e.message}") }
+        }
+
+        // PhysicalChannelConfig — synchronous reflection snapshot
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                val m = tm.javaClass.getMethod("getPhysicalChannelConfigs")
+                @Suppress("UNCHECKED_CAST")
+                val configs = (m.invoke(tm) as? List<PhysicalChannelConfig>) ?: emptyList()
+                DebugLog.d("PCC", "sub=$subId reflect count=${configs.size}")
+                configs.forEachIndexed { i, cfg ->
+                    val freq = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                        cfg.downlinkFrequencyKhz else -1
+                    DebugLog.d("PCC", "[$i] band=${cfg.band} bw=${cfg.cellBandwidthDownlinkKhz}kHz pci=${cfg.physicalCellId} earfcn=${cfg.downlinkChannelNumber} status=${cfg.connectionStatus} freq=${freq}kHz")
+                }
+            } catch (e: Throwable) {
+                DebugLog.d("PCC", "sub=$subId reflect failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun networkTypeName(type: Int): String = when (type) {
+        TelephonyManager.NETWORK_TYPE_UNKNOWN -> "UNKNOWN"
+        TelephonyManager.NETWORK_TYPE_GPRS -> "GPRS"
+        TelephonyManager.NETWORK_TYPE_EDGE -> "EDGE"
+        TelephonyManager.NETWORK_TYPE_UMTS -> "UMTS"
+        TelephonyManager.NETWORK_TYPE_CDMA -> "CDMA"
+        TelephonyManager.NETWORK_TYPE_EVDO_0 -> "EVDO_0"
+        TelephonyManager.NETWORK_TYPE_EVDO_A -> "EVDO_A"
+        TelephonyManager.NETWORK_TYPE_1xRTT -> "1xRTT"
+        TelephonyManager.NETWORK_TYPE_HSDPA -> "HSDPA"
+        TelephonyManager.NETWORK_TYPE_HSUPA -> "HSUPA"
+        TelephonyManager.NETWORK_TYPE_HSPA -> "HSPA"
+        TelephonyManager.NETWORK_TYPE_EVDO_B -> "EVDO_B"
+        TelephonyManager.NETWORK_TYPE_LTE -> "LTE"
+        TelephonyManager.NETWORK_TYPE_EHRPD -> "EHRPD"
+        TelephonyManager.NETWORK_TYPE_HSPAP -> "HSPA+"
+        TelephonyManager.NETWORK_TYPE_GSM -> "GSM"
+        TelephonyManager.NETWORK_TYPE_TD_SCDMA -> "TD-SCDMA"
+        TelephonyManager.NETWORK_TYPE_IWLAN -> "IWLAN"
+        TelephonyManager.NETWORK_TYPE_NR -> "NR"
+        else -> "?(${type})"
     }
 }
