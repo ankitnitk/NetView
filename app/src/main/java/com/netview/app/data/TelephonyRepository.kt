@@ -103,9 +103,15 @@ class TelephonyRepository(private val context: Context) {
             else -> "CS"
         }
 
-        val ca = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            caCache[sub.subscriptionId] ?: emptyList()
-        else emptyList()
+        // CA: layered fallback. Callback cache → synchronous reflection → cell info heuristic.
+        val cached = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            caCache[sub.subscriptionId] ?: emptyList() else emptyList()
+        val direct = if (cached.isEmpty()) parsePhysicalChannelsViaReflection(tm) else emptyList()
+        val ca = when {
+            cached.isNotEmpty() -> cached
+            direct.isNotEmpty() -> direct
+            else -> detectCaFromCellInfo(cellInfos)
+        }
 
         // Serving network PLMN — use ServiceState.operatorNumeric, not home SIM (critical for roaming)
         val operatorNumeric = serviceState?.operatorNumeric?.takeIf { it.length >= 5 }
@@ -272,29 +278,30 @@ class TelephonyRepository(private val context: Context) {
         )
     }
 
-    /* ===== CA detection from allCellInfo (fallback when PhysicalChannelConfig unavailable) ===== */
+    /* ===== CA fallbacks when PhysicalChannelConfig callback never fires ===== */
 
     private fun detectCaFromCellInfo(cells: List<CellInfo>): List<CarrierComponent> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return emptyList()
-        val lteCells = cells.filterIsInstance<CellInfoLte>()
+        // Conservative: require multiple LTE cells, same eNB, different EARFCNs.
+        val lteCells = cells.filterIsInstance<CellInfoLte>().filter {
+            it.cellIdentity.ci != CellInfo.UNAVAILABLE && it.cellIdentity.ci > 0
+        }
         val pcell = lteCells.firstOrNull { it.isRegistered } ?: return emptyList()
-        val pcellEnb = pcell.cellIdentity.ci.let {
-            if (it != CellInfo.UNAVAILABLE && it > 0) it / 256L else return emptyList()
-        }
-        // Keep only cells from the same eNB (they are CA component carriers)
-        val caCells = lteCells.filter { cell ->
-            val cid = cell.cellIdentity.ci
-            cid != CellInfo.UNAVAILABLE && cid > 0 && cid / 256L == pcellEnb
-        }
-        if (caCells.size < 2) return emptyList()
-        return caCells.mapIndexed { idx, cell ->
+        val pcellEnb = pcell.cellIdentity.ci / 256L
+        val sameEnb = lteCells.filter { it.cellIdentity.ci / 256L == pcellEnb }
+        if (sameEnb.size < 2) return emptyList()
+        val uniqueEarfcns = sameEnb.mapNotNull {
+            it.cellIdentity.earfcn.takeIf { e -> e != CellInfo.UNAVAILABLE && e > 0 }
+        }.distinct()
+        if (uniqueEarfcns.size < 2) return emptyList()  // same band = sectors, not CA
+        return sameEnb.mapIndexed { idx, cell ->
             val id = cell.cellIdentity
             val earfcn = id.earfcn.takeIf { it != CellInfo.UNAVAILABLE }
             val bwKhz = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.bandwidth
                         else CellInfo.UNAVAILABLE
             CarrierComponent(
                 index = idx,
-                role = if (cell.isRegistered) "PCell" else "SCell",
+                role = if (cell.isRegistered && idx == 0) "PCell" else "SCell",
                 band = BandMapper.lteBand(earfcn),
                 bandwidthMhz = if (bwKhz > 0 && bwKhz != CellInfo.UNAVAILABLE) bwKhz / 1000.0 else null,
                 pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE },
@@ -302,6 +309,43 @@ class TelephonyRepository(private val context: Context) {
                 downlinkFrequencyMhz = null
             )
         }
+    }
+
+    /**
+     * Try the hidden synchronous TelephonyManager.getPhysicalChannelConfigs() via reflection.
+     * On some Samsung builds this works even when the callback-based API silently fails.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun parsePhysicalChannelsViaReflection(tm: TelephonyManager): List<CarrierComponent> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return emptyList()
+        val configs: List<PhysicalChannelConfig> = try {
+            val m = tm.javaClass.getMethod("getPhysicalChannelConfigs")
+            (m.invoke(tm) as? List<PhysicalChannelConfig>) ?: emptyList()
+        } catch (e: Throwable) { emptyList() }
+        if (configs.isEmpty()) return emptyList()
+        return configs.mapIndexed { idx, cfg -> physicalChannelToCarrier(idx, cfg) }
+    }
+
+    private fun physicalChannelToCarrier(idx: Int, cfg: PhysicalChannelConfig): CarrierComponent {
+        val bwKhz = cfg.cellBandwidthDownlinkKhz
+        val role = when (cfg.connectionStatus) {
+            PhysicalChannelConfig.CONNECTION_PRIMARY_SERVING -> "PCell"
+            PhysicalChannelConfig.CONNECTION_SECONDARY_SERVING -> "SCell"
+            else -> "—"
+        }
+        val rank = try { cfg.rank.takeIf { it > 0 } } catch (e: Throwable) { null }
+        return CarrierComponent(
+            index = idx,
+            role = role,
+            band = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "Band ${cfg.band}" else null,
+            bandwidthMhz = if (bwKhz > 0) bwKhz / 1000.0 else null,
+            pci = cfg.physicalCellId.takeIf { it >= 0 },
+            earfcn = cfg.downlinkChannelNumber.takeIf { it > 0 },
+            downlinkFrequencyMhz = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                cfg.downlinkFrequencyKhz.takeIf { it > 0 }?.let { it / 1000.0 }
+            } else null,
+            mimoLayers = rank
+        )
     }
 
     /* ===== Carrier aggregation (Android 12+) ===== */
@@ -319,25 +363,7 @@ class TelephonyRepository(private val context: Context) {
 
         val cb = object : TelephonyCallback(), TelephonyCallback.PhysicalChannelConfigListener {
             override fun onPhysicalChannelConfigChanged(configs: MutableList<PhysicalChannelConfig>) {
-                val list = configs.mapIndexed { idx, cfg ->
-                    val bwKhz = cfg.cellBandwidthDownlinkKhz
-                    val role = when (cfg.connectionStatus) {
-                        PhysicalChannelConfig.CONNECTION_PRIMARY_SERVING -> "PCell"
-                        PhysicalChannelConfig.CONNECTION_SECONDARY_SERVING -> "SCell"
-                        else -> "—"
-                    }
-                    CarrierComponent(
-                        index = idx,
-                        role = role,
-                        band = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "Band ${cfg.band}" else null,
-                        bandwidthMhz = if (bwKhz > 0) bwKhz / 1000.0 else null,
-                        pci = cfg.physicalCellId.takeIf { it >= 0 },
-                        earfcn = cfg.downlinkChannelNumber.takeIf { it > 0 },
-                        downlinkFrequencyMhz = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            cfg.downlinkFrequencyKhz.takeIf { it > 0 }?.let { it / 1000.0 }
-                        } else null
-                    )
-                }
+                val list = configs.mapIndexed { idx, cfg -> physicalChannelToCarrier(idx, cfg) }
                 caCache[subId] = list
                 _caFlow.value = caCache.toMap()
             }

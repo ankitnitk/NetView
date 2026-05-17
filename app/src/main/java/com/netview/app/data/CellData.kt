@@ -66,7 +66,8 @@ data class CarrierComponent(
     val bandwidthMhz: Double?,
     val pci: Int?,
     val earfcn: Int?,
-    val downlinkFrequencyMhz: Double?
+    val downlinkFrequencyMhz: Double?,
+    val mimoLayers: Int? = null // MIMO rank from PhysicalChannelConfig
 )
 
 /** GPS / location snapshot. */

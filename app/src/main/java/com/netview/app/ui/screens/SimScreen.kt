@@ -138,12 +138,18 @@ fun SimScreen(
         // Carrier Aggregation
         if (sim.carrierAggregation.isNotEmpty()) {
             val rows = mutableListOf<Pair<String, String>>()
-            rows += "CA Status" to "Active (${sim.carrierAggregation.size} CC)"
+            val bandSummary = sim.carrierAggregation
+                .mapNotNull { it.band?.removePrefix("Band ")?.let { b -> "B$b" } }
+                .distinct()
+                .joinToString(" + ")
+                .ifBlank { "${sim.carrierAggregation.size} CC" }
+            rows += "CA Status" to "Active • $bandSummary"
             sim.carrierAggregation.forEach { cc ->
                 val freq = cc.downlinkFrequencyMhz?.let { " @ %.1f MHz".format(it) } ?: ""
-                val bw = cc.bandwidthMhz?.let { " ${it} MHz" } ?: ""
+                val bw = cc.bandwidthMhz?.let { " %.1f MHz".format(it) } ?: ""
+                val mimo = cc.mimoLayers?.let { " • ${it}L MIMO" } ?: ""
                 rows += "CC${cc.index + 1} (${cc.role})" to
-                        "${cc.band ?: "—"}$bw • PCI ${Formatters.intOrDash(cc.pci)}$freq"
+                        "${cc.band ?: "—"}$bw • PCI ${Formatters.intOrDash(cc.pci)}$mimo$freq"
             }
             InfoCard(title = "Carrier Aggregation", rows = rows)
         } else {
