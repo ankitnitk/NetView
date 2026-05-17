@@ -54,7 +54,10 @@ object Formatters {
     private fun nrStateSafe(ss: ServiceState?): Int {
         if (ss == null) return -1
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return -1
-        return try { ss.nrState } catch (e: Throwable) { -1 }
+        return try {
+            val method = ss.javaClass.getMethod("getNrState")
+            method.invoke(ss) as? Int ?: -1
+        } catch (e: Throwable) { -1 }
     }
 
     /** Decode LTE eNB and sector from CID (CID = eNB*256 + sector). */
