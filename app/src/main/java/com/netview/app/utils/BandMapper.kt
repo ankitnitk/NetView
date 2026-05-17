@@ -76,6 +76,40 @@ object BandMapper {
         return nrBands.firstOrNull { nrarfcn in it.start..it.end }?.band
     }
 
+    // UMTS downlink UARFCN ranges (TS 25.101 Table 5.1)
+    private val wcdmaBands = listOf(
+        Range("B1", 10562, 10838),    // 2100 MHz
+        Range("B2", 9662, 9938),      // 1900 MHz
+        Range("B3", 1162, 1513),      // 1800 MHz
+        Range("B4", 1537, 1738),      // AWS
+        Range("B5", 4357, 4458),      // 850 MHz
+        Range("B6", 4387, 4413),      // 800 Japan
+        Range("B7", 2237, 2563),      // 2600 MHz
+        Range("B8", 2937, 3088),      // 900 MHz
+        Range("B9", 9237, 9387),      // 1700 Japan
+        Range("B10", 3112, 3388),     // AWS extended
+        Range("B19", 712, 763)        // 800 Japan
+    )
+
+    fun wcdmaBand(uarfcn: Int?): String? {
+        if (uarfcn == null || uarfcn <= 0) return null
+        return wcdmaBands.firstOrNull { uarfcn in it.start..it.end }?.band
+    }
+
+    /**
+     * GSM band from ARFCN (TS 45.005). Returns short name like "GSM 900".
+     */
+    fun gsmBand(arfcn: Int?): String? {
+        if (arfcn == null || arfcn < 0) return null
+        return when (arfcn) {
+            in 0..124, in 975..1023 -> "GSM 900"   // P-GSM 0-124, E-GSM 975-1023
+            in 128..251 -> "GSM 850"
+            in 512..885 -> "GSM 1800"              // DCS 1800 (also overlaps PCS 1900 numbering on some)
+            in 886..1024 -> "GSM 1900"             // PCS 1900
+            else -> null
+        }
+    }
+
     /**
      * Bandwidth from LTE bandwidth indicator (PRB count).
      */

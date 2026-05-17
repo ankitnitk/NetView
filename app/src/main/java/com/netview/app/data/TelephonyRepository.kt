@@ -91,7 +91,10 @@ class TelephonyRepository(private val context: Context) {
         val dataType = try { tm.dataNetworkType } catch (e: Exception) { TelephonyManager.NETWORK_TYPE_UNKNOWN }
 
         val cellInfos = try { tm.allCellInfo ?: emptyList() } catch (e: Exception) { emptyList() }
-        val serving = parseServingCell(cellInfos)
+        // allCellInfo is tied to the active modem, not the SIM — both subs return the same list
+        // on a single-modem device. Prefer per-SIM ServiceState.NetworkRegistrationInfo cellIdentity;
+        // fall back to allCellInfo only when the SS path yields nothing.
+        val serving = parseServingFromServiceState(tm, serviceState) ?: parseServingCell(cellInfos)
         val signalStrengths = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                 tm.signalStrength?.cellSignalStrengths ?: emptyList()
@@ -141,11 +144,22 @@ class TelephonyRepository(private val context: Context) {
             else -> "CS"
         }
 
+        // Clear stale CA / band-history when not on LTE/NR — otherwise old aggregation data
+        // from a prior LTE session lingers when the device drops to 3G/2G.
+        val isLteOrNr = serving?.rat == "LTE" || serving?.rat == "NR"
+        if (!isLteOrNr) {
+            caCache.remove(sub.subscriptionId)
+            recentBandsBySubId.remove(sub.subscriptionId)
+        }
         // Accumulate bands seen in this and prior reads — used to fill SCell band labels
         // since per-CC band info isn't in any public API.
-        val bandHistory = recentBandsBySubId.getOrPut(sub.subscriptionId) { mutableSetOf() }
-        serving?.band?.let { bandHistory.add(it) }
-        extractBandsFromCellInfo(cellInfos).forEach { bandHistory.add(it) }
+        val bandHistory = if (isLteOrNr)
+            recentBandsBySubId.getOrPut(sub.subscriptionId) { mutableSetOf() }
+        else mutableSetOf()
+        if (isLteOrNr) {
+            serving?.band?.let { bandHistory.add(it) }
+            extractBandsFromCellInfo(cellInfos).forEach { bandHistory.add(it) }
+        }
 
         // Attach duplex mode + capability info to the LTE serving cell
         val servingEnriched = if (serving?.rat == "LTE")
@@ -349,6 +363,149 @@ class TelephonyRepository(private val context: Context) {
             cqi = null, timingAdvance = s.timingAdvance.takeIf { it != CellInfo.UNAVAILABLE },
             bsic = id.bsic.takeIf { it != CellInfo.UNAVAILABLE },
             ber = s.bitErrorRate.takeIf { it != CellInfo.UNAVAILABLE }
+        )
+    }
+
+    /* ===== Per-SIM serving cell from ServiceState (correct for DSDS) ===== */
+
+    @SuppressLint("MissingPermission")
+    private fun parseServingFromServiceState(tm: TelephonyManager, ss: ServiceState?): ServingCellInfo? {
+        if (ss == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val psInfo = try {
+            ss.networkRegistrationInfoList.firstOrNull { reg ->
+                reg.domain == NetworkRegistrationInfo.DOMAIN_PS &&
+                        reg.transportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN &&
+                        reg.cellIdentity != null
+            }
+        } catch (e: Exception) { null } ?: return null
+        val cellId = psInfo.cellIdentity ?: return null
+        // tm.signalStrength is per-SIM (since tm was created with createForSubscriptionId)
+        val sigList = try { tm.signalStrength?.cellSignalStrengths ?: emptyList() }
+                      catch (e: Exception) { emptyList() }
+        return when (cellId) {
+            is CellIdentityLte ->
+                parseLteIdentity(cellId, sigList.filterIsInstance<CellSignalStrengthLte>().firstOrNull())
+            is CellIdentityWcdma ->
+                parseWcdmaIdentity(cellId, sigList.filterIsInstance<CellSignalStrengthWcdma>().firstOrNull())
+            is CellIdentityGsm ->
+                parseGsmIdentity(cellId, sigList.filterIsInstance<CellSignalStrengthGsm>().firstOrNull())
+            else -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && cellId is CellIdentityNr)
+                parseNrIdentity(cellId, sigList.filterIsInstance<CellSignalStrengthNr>().firstOrNull())
+            else null
+        }
+    }
+
+    private fun parseWcdmaIdentity(id: CellIdentityWcdma, s: CellSignalStrengthWcdma?): ServingCellInfo {
+        val uarfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            id.uarfcn.takeIf { it != CellInfo.UNAVAILABLE } else null
+        val ecNo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+            try { s?.ecNo?.takeIf { it != CellInfo.UNAVAILABLE } } catch (e: Throwable) { null }
+        else null
+        return ServingCellInfo(
+            rat = "WCDMA",
+            mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString else id.mcc.toString(),
+            mnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mncString else id.mnc.toString(),
+            pci = id.psc.takeIf { it != CellInfo.UNAVAILABLE },
+            tac = id.lac.takeIf { it != CellInfo.UNAVAILABLE },
+            cellId = id.cid.toLong().takeIf { it > 0 && it != CellInfo.UNAVAILABLE.toLong() },
+            enbId = null, gnbId = null, sectorId = null,
+            earfcn = null, nrarfcn = null,
+            uarfcn = uarfcn, arfcn = null,
+            band = BandMapper.wcdmaBand(uarfcn),
+            bandwidthMhz = 5.0, // UMTS is always 5 MHz per carrier
+            rsrp = null, rsrq = null, rssnr = null,
+            ssSinr = null, csiRsrp = null, csiRsrq = null, csiSinr = null,
+            rscp = s?.dbm?.takeIf { it != CellInfo.UNAVAILABLE },
+            ecNo = ecNo,
+            rssi = s?.dbm?.takeIf { it != CellInfo.UNAVAILABLE },
+            cqi = null, timingAdvance = null, bsic = null, ber = null
+        )
+    }
+
+    private fun parseGsmIdentity(id: CellIdentityGsm, s: CellSignalStrengthGsm?): ServingCellInfo {
+        val arfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            id.arfcn.takeIf { it != CellInfo.UNAVAILABLE } else null
+        return ServingCellInfo(
+            rat = "GSM",
+            mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString else id.mcc.toString(),
+            mnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mncString else id.mnc.toString(),
+            pci = null,
+            tac = id.lac.takeIf { it != CellInfo.UNAVAILABLE },
+            cellId = id.cid.toLong().takeIf { it > 0 && it != CellInfo.UNAVAILABLE.toLong() },
+            enbId = null, gnbId = null, sectorId = null,
+            earfcn = null, nrarfcn = null, uarfcn = null,
+            arfcn = arfcn,
+            band = BandMapper.gsmBand(arfcn),
+            bandwidthMhz = 0.2, // GSM 200 kHz
+            rsrp = null, rsrq = null, rssnr = null,
+            ssSinr = null, csiRsrp = null, csiRsrq = null, csiSinr = null,
+            rscp = null, ecNo = null,
+            rssi = s?.dbm?.takeIf { it != CellInfo.UNAVAILABLE },
+            cqi = null,
+            timingAdvance = s?.timingAdvance?.takeIf { it != CellInfo.UNAVAILABLE },
+            bsic = id.bsic.takeIf { it != CellInfo.UNAVAILABLE },
+            ber = s?.bitErrorRate?.takeIf { it != CellInfo.UNAVAILABLE }
+        )
+    }
+
+    private fun parseLteIdentity(id: CellIdentityLte, s: CellSignalStrengthLte?): ServingCellInfo {
+        val cid = id.ci.toLong()
+        val earfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) id.earfcn else null
+        val bw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.bandwidth else CellInfo.UNAVAILABLE
+        return ServingCellInfo(
+            rat = "LTE",
+            mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString else id.mcc.toString(),
+            mnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mncString else id.mnc.toString(),
+            pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE },
+            tac = id.tac.takeIf { it != CellInfo.UNAVAILABLE },
+            cellId = if (cid > 0 && cid != CellInfo.UNAVAILABLE.toLong()) cid else null,
+            enbId = Formatters.lteEnbId(cid),
+            sectorId = Formatters.lteSectorId(cid),
+            gnbId = null,
+            earfcn = earfcn?.takeIf { it != CellInfo.UNAVAILABLE },
+            nrarfcn = null, uarfcn = null, arfcn = null,
+            band = BandMapper.lteBand(earfcn),
+            bandwidthMhz = if (bw > 0 && bw != CellInfo.UNAVAILABLE) bw / 1000.0 else null,
+            rsrp = s?.rsrp?.takeIf { it != CellInfo.UNAVAILABLE },
+            rsrq = s?.rsrq?.takeIf { it != CellInfo.UNAVAILABLE },
+            rssnr = s?.rssnr?.takeIf { it != CellInfo.UNAVAILABLE },
+            ssSinr = null, csiRsrp = null, csiRsrq = null, csiSinr = null,
+            rscp = null, ecNo = null,
+            rssi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                s?.rssi?.takeIf { it != CellInfo.UNAVAILABLE } else null,
+            cqi = s?.cqi?.takeIf { it != CellInfo.UNAVAILABLE },
+            timingAdvance = s?.timingAdvance?.takeIf { it != CellInfo.UNAVAILABLE },
+            bsic = null, ber = null
+        )
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun parseNrIdentity(id: CellIdentityNr, s: CellSignalStrengthNr?): ServingCellInfo {
+        val nci = id.nci
+        val nrarfcn = id.nrarfcn
+        return ServingCellInfo(
+            rat = "NR",
+            mcc = id.mccString, mnc = id.mncString,
+            pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE },
+            tac = id.tac.takeIf { it != CellInfo.UNAVAILABLE },
+            cellId = if (nci > 0) nci else null,
+            enbId = null,
+            gnbId = Formatters.nrGnbId(nci),
+            sectorId = null,
+            earfcn = null,
+            nrarfcn = nrarfcn.takeIf { it != CellInfo.UNAVAILABLE },
+            uarfcn = null, arfcn = null,
+            band = BandMapper.nrBand(nrarfcn),
+            bandwidthMhz = null,
+            rsrp = s?.ssRsrp?.takeIf { it != CellInfo.UNAVAILABLE },
+            rsrq = s?.ssRsrq?.takeIf { it != CellInfo.UNAVAILABLE },
+            rssnr = null,
+            ssSinr = s?.ssSinr?.takeIf { it != CellInfo.UNAVAILABLE },
+            csiRsrp = s?.csiRsrp?.takeIf { it != CellInfo.UNAVAILABLE },
+            csiRsrq = s?.csiRsrq?.takeIf { it != CellInfo.UNAVAILABLE },
+            csiSinr = s?.csiSinr?.takeIf { it != CellInfo.UNAVAILABLE },
+            rscp = null, ecNo = null, rssi = null, cqi = null,
+            timingAdvance = null, bsic = null, ber = null
         )
     }
 

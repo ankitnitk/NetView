@@ -91,14 +91,20 @@ fun SimScreen(
                 "WCDMA" -> {
                     rows += "LAC" to Formatters.intOrDash(c.tac)
                     rows += "CID" to Formatters.longOrDash(c.cellId)
+                    // UMTS CID = RNC_ID * 65536 + Cell_ID_within_RNC
+                    c.cellId?.let { cid ->
+                        rows += "RNC ID" to (cid shr 16).toString()
+                    }
                     rows += "PSC" to Formatters.intOrDash(c.pci)
                     rows += "UARFCN" to Formatters.intOrDash(c.uarfcn)
+                    rows += "Band" to Formatters.stringOrDash(c.band)
                 }
                 "GSM" -> {
                     rows += "LAC" to Formatters.intOrDash(c.tac)
                     rows += "CID" to Formatters.longOrDash(c.cellId)
                     rows += "ARFCN" to Formatters.intOrDash(c.arfcn)
                     rows += "BSIC" to Formatters.intOrDash(c.bsic)
+                    rows += "Band" to Formatters.stringOrDash(c.band)
                 }
             }
             InfoCard(title = "Serving Cell", rows = rows)
@@ -124,6 +130,7 @@ fun SimScreen(
                 }
                 "WCDMA" -> {
                     sig += "RSCP" to Formatters.signedOrDash(c.rscp, "dBm")
+                    sig += "Ec/No" to Formatters.signedOrDash(c.ecNo, "dB")
                     sig += "RSSI" to Formatters.signedOrDash(c.rssi, "dBm")
                 }
                 "GSM" -> {
@@ -157,8 +164,9 @@ fun SimScreen(
             InfoCard(title = "5G NR Leg", rows = rows)
         }
 
-        // Carrier Aggregation
-        if (sim.carrierAggregation.isNotEmpty()) {
+        // Carrier Aggregation (LTE / NR only)
+        val ratIsLteOrNr = sim.servingCell?.rat == "LTE" || sim.servingCell?.rat == "NR"
+        if (ratIsLteOrNr && sim.carrierAggregation.isNotEmpty()) {
             val rows = mutableListOf<Pair<String, String>>()
             val bwSummary = sim.carrierAggregation
                 .mapNotNull { it.bandwidthMhz?.let { v -> "%.0f".format(v) } }
@@ -183,12 +191,13 @@ fun SimScreen(
                         "${cc.band ?: "—"}$bw • PCI ${Formatters.intOrDash(cc.pci)}$mimo$freq"
             }
             InfoCard(title = "Carrier Aggregation", rows = rows)
-        } else {
+        } else if (ratIsLteOrNr) {
             InfoCard(
                 title = "Carrier Aggregation",
                 rows = listOf("CA Status" to "—")
             )
         }
+        // No CA card at all when on 2G/3G — concept doesn't apply.
 
         // Location
         location?.let { loc ->

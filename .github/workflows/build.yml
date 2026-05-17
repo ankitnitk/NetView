@@ -37,8 +37,8 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build Release APK (signed with debug key for sideload)
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Read version
         id: ver
@@ -49,8 +49,8 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk "out/NetView-${{ steps.ver.outputs.name }}.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk out/NetView-latest.apk
+          cp app/build/outputs/apk/release/app-release.apk "out/NetView-${{ steps.ver.outputs.name }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk out/NetView-latest.apk
 
       - name: Upload APK artifact (also keeps a CI download for 30 days)
         uses: actions/upload-artifact@v4
