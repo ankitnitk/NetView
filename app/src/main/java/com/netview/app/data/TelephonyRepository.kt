@@ -29,6 +29,8 @@ class TelephonyRepository(private val context: Context) {
     private val executor: Executor = ContextCompat.getMainExecutor(context)
     private val caCache = mutableMapOf<Int, List<CarrierComponent>>()
     private val callbacks = mutableMapOf<Int, TelephonyCallback>()
+    // Deprecated PhoneStateListener path — works on Samsung where TelephonyCallback silently fails
+    private val phoneStateListeners = mutableMapOf<Int, PhoneStateListener>()
 
     private val _caFlow = MutableStateFlow<Map<Int, List<CarrierComponent>>>(emptyMap())
     val caFlow: StateFlow<Map<Int, List<CarrierComponent>>> = _caFlow
@@ -61,9 +63,14 @@ class TelephonyRepository(private val context: Context) {
             emptyList()
         }
 
-        // First-call: register CA listener for each sub (Android 12+)
+        // Register CA listeners on each subscription. We try BOTH paths — TelephonyCallback
+        // (proper public API, S+) and the deprecated PhoneStateListener with hidden event
+        // constant (the path NetMonster uses; works on Samsung where TelephonyCallback is blocked).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            subs.forEach { sub -> ensureCaListener(sub.subscriptionId) }
+            subs.forEach { sub ->
+                ensureCaListener(sub.subscriptionId)
+                ensurePccPhoneStateListener(sub.subscriptionId)
+            }
         }
 
         return subs.map { sub -> readOneSim(sub) }
@@ -383,6 +390,42 @@ class TelephonyRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Register a deprecated PhoneStateListener with the hidden LISTEN_PHYSICAL_CHANNEL_CONFIGURATION
+     * event (0x00100000). The override is matched at runtime by signature — the method is
+     * @SystemApi so the compiler won't accept `override`, but the JVM dispatches it.
+     * This path bypasses the READ_PRECISE_PHONE_STATE check that blocks TelephonyCallback on Samsung.
+     */
+    @SuppressLint("MissingPermission")
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun ensurePccPhoneStateListener(subId: Int) {
+        if (phoneStateListeners.containsKey(subId) && !caCache[subId].isNullOrEmpty()) return
+        phoneStateListeners.remove(subId)?.let { old ->
+            try { telephonyManager.createForSubscriptionId(subId).listen(old, PhoneStateListener.LISTEN_NONE) }
+            catch (e: Exception) { /* ignore */ }
+        }
+        val event = try {
+            PhoneStateListener::class.java
+                .getDeclaredField("LISTEN_PHYSICAL_CHANNEL_CONFIGURATION")
+                .apply { isAccessible = true }
+                .getInt(null)
+        } catch (e: Throwable) { 0x00100000 }  // documented value
+        val tm = telephonyManager.createForSubscriptionId(subId)
+        val listener = object : PhoneStateListener() {
+            // No `override` — method is @SystemApi, hidden. JVM matches by signature at runtime.
+            @Suppress("unused")
+            fun onPhysicalChannelConfigurationChanged(configs: List<PhysicalChannelConfig>) {
+                val list = configs.mapIndexed { idx, cfg -> physicalChannelToCarrier(idx, cfg) }
+                caCache[subId] = list
+                _caFlow.value = caCache.toMap()
+            }
+        }
+        try {
+            tm.listen(listener, event)
+            phoneStateListeners[subId] = listener
+        } catch (e: Throwable) { /* ignore */ }
+    }
+
     fun release() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             callbacks.forEach { (subId, cb) ->
@@ -391,6 +434,12 @@ class TelephonyRepository(private val context: Context) {
                 } catch (e: Exception) { /* ignore */ }
             }
             callbacks.clear()
+            phoneStateListeners.forEach { (subId, ls) ->
+                try {
+                    telephonyManager.createForSubscriptionId(subId).listen(ls, PhoneStateListener.LISTEN_NONE)
+                } catch (e: Exception) { /* ignore */ }
+            }
+            phoneStateListeners.clear()
         }
     }
 }
