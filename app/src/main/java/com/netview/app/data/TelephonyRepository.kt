@@ -947,7 +947,10 @@ class TelephonyRepository(private val context: Context) {
                         else -> "?(${reg.transportType})"
                     }
                     val tech = networkTypeName(reg.accessNetworkTechnology)
-                    val state = reg.registrationState
+                    val state = try {
+                        val m = reg.javaClass.getMethod("getRegistrationState")
+                        m.invoke(reg)?.toString() ?: "?"
+                    } catch (e: Throwable) { "n/a" }
                     val plmn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         try { reg.registeredPlmn ?: "null" } catch (e: Throwable) { "err" }
                     } else "n/a"
