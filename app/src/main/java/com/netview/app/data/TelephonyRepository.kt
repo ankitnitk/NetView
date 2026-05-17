@@ -70,6 +70,9 @@ class TelephonyRepository(private val context: Context) {
         val serviceState: ServiceState? = try { tm.serviceState } catch (e: Exception) { null }
         val dataType = try { tm.dataNetworkType } catch (e: Exception) { TelephonyManager.NETWORK_TYPE_UNKNOWN }
 
+        val cellInfos = try { tm.allCellInfo ?: emptyList() } catch (e: Exception) { emptyList() }
+        val serving = parseServingCell(cellInfos)
+
         // NSA: modem reports LTE as data RAT but also surfaces a CellInfoNr entry
         val hasNrCell = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
                 cellInfos.any { it is CellInfoNr }
@@ -86,9 +89,6 @@ class TelephonyRepository(private val context: Context) {
             volte -> "VoLTE"
             else -> "CS"
         }
-
-        val cellInfos = try { tm.allCellInfo ?: emptyList() } catch (e: Exception) { emptyList() }
-        val serving = parseServingCell(cellInfos)
 
         val cachedCa = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             caCache[sub.subscriptionId] else null
