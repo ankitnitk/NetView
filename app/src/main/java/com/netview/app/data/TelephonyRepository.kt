@@ -70,7 +70,14 @@ class TelephonyRepository(private val context: Context) {
         val serviceState: ServiceState? = try { tm.serviceState } catch (e: Exception) { null }
         val dataType = try { tm.dataNetworkType } catch (e: Exception) { TelephonyManager.NETWORK_TYPE_UNKNOWN }
 
-        val networkType = Formatters.radioMode(dataType, serviceState)
+        // NSA: modem reports LTE as data RAT but also surfaces a CellInfoNr entry
+        val hasNrCell = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                cellInfos.any { it is CellInfoNr }
+        val networkType = when {
+            dataType == TelephonyManager.NETWORK_TYPE_NR -> "5G SA"
+            hasNrCell && dataType == TelephonyManager.NETWORK_TYPE_LTE -> "5G NSA"
+            else -> Formatters.radioMode(dataType, serviceState)
+        }
 
         val volte = isVolteRegistered(tm)
         val vonr = isVonrRegistered(serviceState)
@@ -83,9 +90,10 @@ class TelephonyRepository(private val context: Context) {
         val cellInfos = try { tm.allCellInfo ?: emptyList() } catch (e: Exception) { emptyList() }
         val serving = parseServingCell(cellInfos)
 
-        val ca = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            caCache[sub.subscriptionId] ?: emptyList()
-        else emptyList()
+        val cachedCa = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            caCache[sub.subscriptionId] else null
+        val ca = if (!cachedCa.isNullOrEmpty()) cachedCa
+                 else detectCaFromCellInfo(cellInfos)
 
         return SimSlotData(
             subId = sub.subscriptionId,
@@ -121,7 +129,13 @@ class TelephonyRepository(private val context: Context) {
     }
 
     private fun parseServingCell(cells: List<CellInfo>): ServingCellInfo? {
-        val serving = cells.firstOrNull { it.isRegistered } ?: cells.firstOrNull() ?: return null
+        val registered = cells.filter { it.isRegistered }
+        // On 5G NSA both LTE and NR may be marked registered; prefer LTE (anchor)
+        // so we always surface bandwidth, EARFCN, eNB, etc.
+        val serving = registered.firstOrNull { it is CellInfoLte }
+            ?: registered.firstOrNull()
+            ?: cells.firstOrNull()
+            ?: return null
         return when (serving) {
             is CellInfoLte -> parseLte(serving)
             is CellInfoWcdma -> parseWcdma(serving)
@@ -239,6 +253,38 @@ class TelephonyRepository(private val context: Context) {
             bsic = id.bsic.takeIf { it != CellInfo.UNAVAILABLE },
             ber = s.bitErrorRate.takeIf { it != CellInfo.UNAVAILABLE }
         )
+    }
+
+    /* ===== CA detection from allCellInfo (fallback when PhysicalChannelConfig unavailable) ===== */
+
+    private fun detectCaFromCellInfo(cells: List<CellInfo>): List<CarrierComponent> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return emptyList()
+        val lteCells = cells.filterIsInstance<CellInfoLte>()
+        val pcell = lteCells.firstOrNull { it.isRegistered } ?: return emptyList()
+        val pcellEnb = pcell.cellIdentity.ci.let {
+            if (it != CellInfo.UNAVAILABLE && it > 0) it / 256L else return emptyList()
+        }
+        // Keep only cells from the same eNB (they are CA component carriers)
+        val caCells = lteCells.filter { cell ->
+            val cid = cell.cellIdentity.ci
+            cid != CellInfo.UNAVAILABLE && cid > 0 && cid / 256L == pcellEnb
+        }
+        if (caCells.size < 2) return emptyList()
+        return caCells.mapIndexed { idx, cell ->
+            val id = cell.cellIdentity
+            val earfcn = id.earfcn.takeIf { it != CellInfo.UNAVAILABLE }
+            val bwKhz = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.bandwidth
+                        else CellInfo.UNAVAILABLE
+            CarrierComponent(
+                index = idx,
+                role = if (cell.isRegistered) "PCell" else "SCell",
+                band = BandMapper.lteBand(earfcn),
+                bandwidthMhz = if (bwKhz > 0 && bwKhz != CellInfo.UNAVAILABLE) bwKhz / 1000.0 else null,
+                pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE },
+                earfcn = earfcn,
+                downlinkFrequencyMhz = null
+            )
+        }
     }
 
     /* ===== Carrier aggregation (Android 12+) ===== */
