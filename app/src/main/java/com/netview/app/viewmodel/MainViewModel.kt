@@ -8,6 +8,7 @@ import com.netview.app.data.LocationRepository
 import com.netview.app.data.SettingsRepository
 import com.netview.app.data.SimSlotData
 import com.netview.app.data.TelephonyRepository
+import com.netview.app.utils.DebugLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,12 +32,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val permissionsGranted: StateFlow<Boolean> = _permissionsGranted.asStateFlow()
 
     val refreshSecondsFlow = settingsRepo.refreshSeconds
+    val debugLoggingEnabledFlow = settingsRepo.debugLoggingEnabled
 
     private var refreshSeconds = SettingsRepository.DEFAULT_REFRESH
 
     init {
         viewModelScope.launch {
             settingsRepo.refreshSeconds.collect { refreshSeconds = it }
+        }
+        viewModelScope.launch {
+            settingsRepo.debugLoggingEnabled.collect { DebugLog.enabled = it }
         }
         viewModelScope.launch {
             while (isActive) {
@@ -64,6 +69,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setRefreshSeconds(seconds: Int) {
         viewModelScope.launch { settingsRepo.setRefreshSeconds(seconds) }
+    }
+
+    fun setDebugLoggingEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setDebugLoggingEnabled(enabled) }
     }
 
     override fun onCleared() {

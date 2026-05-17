@@ -18,12 +18,14 @@ object DebugLog {
     private val buffer = ConcurrentLinkedDeque<String>()
     private val fmt = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
+    @Volatile var enabled: Boolean = false
+
     private val _lines = MutableStateFlow<List<String>>(emptyList())
     val lines: StateFlow<List<String>> = _lines
 
-    fun d(category: String, msg: String) = append("D", category, msg)
-    fun i(category: String, msg: String) = append("I", category, msg)
-    fun w(category: String, msg: String) = append("W", category, msg)
+    fun d(category: String, msg: String) { if (enabled) append("D", category, msg) }
+    fun i(category: String, msg: String) { if (enabled) append("I", category, msg) }
+    fun w(category: String, msg: String) { if (enabled) append("W", category, msg) }
 
     private fun append(level: String, category: String, msg: String) {
         val line = "${fmt.format(Date())} $level/$category: $msg"

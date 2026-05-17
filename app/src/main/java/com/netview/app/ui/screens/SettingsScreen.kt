@@ -13,6 +13,8 @@ import com.netview.app.data.SettingsRepository
 fun SettingsScreen(
     currentRefreshSeconds: Int,
     onRefreshChange: (Int) -> Unit,
+    debugLoggingEnabled: Boolean,
+    onDebugLoggingChange: (Boolean) -> Unit,
     onOpenDebugLog: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -66,15 +68,22 @@ fun SettingsScreen(
 
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Debug", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "View internal log entries to diagnose CA/BW/MIMO availability on this device.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = onOpenDebugLog) { Text("View Debug Log") }
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Debug Logging", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Capture internal events to diagnose carrier-specific issues. Off by default.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = debugLoggingEnabled, onCheckedChange = onDebugLoggingChange)
+                    }
+                    if (debugLoggingEnabled) {
+                        Spacer(Modifier.height(12.dp))
+                        Button(onClick = onOpenDebugLog) { Text("View Debug Log") }
+                    }
                 }
             }
 
@@ -83,7 +92,7 @@ fun SettingsScreen(
                     Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     Text("NetView — Cell Info Viewer", style = MaterialTheme.typography.bodyMedium)
-                    Text("Version 1.0.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Version 1.1.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "Shows serving-cell parameters (PCI, EARFCN, RSRP, RSRQ, SINR…) " +

@@ -164,15 +164,14 @@ fun SimScreen(
                 .joinToString(" + ")
             val totalBw = sim.carrierAggregation.sumOf { it.bandwidthMhz ?: 0.0 }
             val bandSummary = sim.carrierAggregation
-                .mapNotNull { it.band?.removePrefix("Band ")?.let { b -> "B$b" } }
+                .mapNotNull { it.band }
                 .distinct()
                 .joinToString(" + ")
-                .ifBlank { "${sim.carrierAggregation.size} CC" }
             rows += "CA Status" to "Active • ${sim.carrierAggregation.size}CC"
             if (bwSummary.isNotBlank()) {
                 rows += "Bandwidths" to "$bwSummary MHz  (Σ ${"%.0f".format(totalBw)} MHz)"
             }
-            if (bandSummary.isNotBlank() && bandSummary != "${sim.carrierAggregation.size} CC") {
+            if (bandSummary.isNotBlank()) {
                 rows += "Bands" to bandSummary
             }
             sim.carrierAggregation.forEach { cc ->
@@ -206,20 +205,6 @@ fun SimScreen(
         } ?: InfoCard(
             title = "Location",
             rows = listOf("Status" to "Acquiring GPS fix…")
-        )
-
-        // Diagnostics — shows whether the CA listeners are receiving data
-        val d = sim.diagnostics
-        InfoCard(
-            title = "Diagnostics",
-            rows = listOfNotNull(
-                "Cells (allCellInfo)" to "${d.cellInfoTotal} (LTE ${d.cellInfoLte}, NR ${d.cellInfoNr})",
-                "Cells w/ valid CI" to "${d.cellsWithValidCi} / ${d.cellInfoLte}",
-                "SignalStrengths" to "${d.signalStrengthsTotal} (LTE ${d.signalStrengthsLte}, NR ${d.signalStrengthsNr})",
-                "TelephonyCallback (CA)" to "${if (d.tcRegistered) "✓" else "✗"} • fires=${d.tcFires}",
-                "PhoneStateListener (CA)" to "${if (d.pslRegistered) "✓" else "✗"} • fires=${d.pslFires}",
-                d.serviceStateCaHint?.let { "ServiceState hint" to it }
-            )
         )
 
         Spacer(Modifier.height(24.dp))

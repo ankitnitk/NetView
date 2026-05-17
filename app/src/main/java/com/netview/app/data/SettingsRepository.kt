@@ -1,6 +1,7 @@
 package com.netview.app.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -13,6 +14,7 @@ class SettingsRepository(private val context: Context) {
 
     companion object {
         private val REFRESH_SECONDS = intPreferencesKey("refresh_seconds")
+        private val DEBUG_LOGGING = booleanPreferencesKey("debug_logging")
         const val DEFAULT_REFRESH = 2
         const val MIN_REFRESH = 1
         const val MAX_REFRESH = 60
@@ -22,8 +24,16 @@ class SettingsRepository(private val context: Context) {
         prefs[REFRESH_SECONDS] ?: DEFAULT_REFRESH
     }
 
+    val debugLoggingEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[DEBUG_LOGGING] ?: false
+    }
+
     suspend fun setRefreshSeconds(seconds: Int) {
         val clamped = seconds.coerceIn(MIN_REFRESH, MAX_REFRESH)
         context.dataStore.edit { it[REFRESH_SECONDS] = clamped }
+    }
+
+    suspend fun setDebugLoggingEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[DEBUG_LOGGING] = enabled }
     }
 }

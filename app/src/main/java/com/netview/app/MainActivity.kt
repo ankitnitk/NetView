@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
         val location by viewModel.location.collectAsState()
         val permissionsGranted by viewModel.permissionsGranted.collectAsState()
         val refresh by viewModel.refreshSecondsFlow.collectAsState(initial = SettingsRepository.DEFAULT_REFRESH)
+        val debugLogging by viewModel.debugLoggingEnabledFlow.collectAsState(initial = false)
 
         NavHost(navController = nav, startDestination = "main") {
             composable("main") {
@@ -102,6 +103,8 @@ class MainActivity : ComponentActivity() {
                 SettingsScreen(
                     currentRefreshSeconds = refresh,
                     onRefreshChange = { viewModel.setRefreshSeconds(it) },
+                    debugLoggingEnabled = debugLogging,
+                    onDebugLoggingChange = { viewModel.setDebugLoggingEnabled(it) },
                     onOpenDebugLog = { nav.navigate("debug_log") },
                     onBack = { nav.popBackStack() }
                 )
