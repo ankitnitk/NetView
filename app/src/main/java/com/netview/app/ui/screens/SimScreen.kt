@@ -1,13 +1,19 @@
 package com.netview.app.ui.screens
 
+import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.netview.app.data.LocationData
@@ -15,6 +21,7 @@ import com.netview.app.data.SimSlotData
 import com.netview.app.ui.components.InfoCard
 import com.netview.app.ui.components.TechBadge
 import com.netview.app.utils.Formatters
+import com.netview.app.utils.ShareFormatter
 
 @Composable
 fun SimScreen(
@@ -30,6 +37,7 @@ fun SimScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Header
+        val ctx = LocalContext.current
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -45,6 +53,17 @@ fun SimScreen(
                 )
             }
             TechBadge(networkType = sim.networkType)
+            IconButton(onClick = {
+                val text = ShareFormatter.build(sim, location)
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "NetView • ${sim.carrierName}")
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                ctx.startActivity(Intent.createChooser(intent, "Share cell info"))
+            }) {
+                Icon(Icons.Default.Share, contentDescription = "Share")
+            }
         }
 
         // SIM / network identity
@@ -64,6 +83,9 @@ fun SimScreen(
         sim.servingCell?.let { c ->
             val rows = mutableListOf<Pair<String, String>>()
             rows += "RAT" to c.rat
+            if (sim.isNonTerrestrial) {
+                rows += "Network Class" to "Satellite (NTN)"
+            }
             when (c.rat) {
                 "LTE" -> {
                     rows += "eNB ID" to Formatters.longOrDash(c.enbId)
@@ -90,10 +112,13 @@ fun SimScreen(
                 }
                 "WCDMA" -> {
                     rows += "LAC" to Formatters.intOrDash(c.tac)
-                    rows += "CID" to Formatters.longOrDash(c.cellId)
-                    // UMTS CID = RNC_ID * 65536 + Cell_ID_within_RNC
-                    c.cellId?.let { cid ->
-                        rows += "RNC ID" to (cid shr 16).toString()
+                    // UMTS Cell Identity = RNC_ID (upper 12 bits) + CID (lower 16 bits)
+                    // NetMonster: "CI" = full 28-bit, "CID" = lower 16-bit (within RNC).
+                    val ci = c.cellId
+                    rows += "CI" to Formatters.longOrDash(ci)
+                    if (ci != null) {
+                        rows += "RNC ID" to (ci shr 16).toString()
+                        rows += "CID" to (ci and 0xFFFF).toString()
                     }
                     rows += "PSC" to Formatters.intOrDash(c.pci)
                     rows += "UARFCN" to Formatters.intOrDash(c.uarfcn)

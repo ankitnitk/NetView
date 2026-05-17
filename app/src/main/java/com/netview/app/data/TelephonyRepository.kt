@@ -35,9 +35,6 @@ class TelephonyRepository(private val context: Context) {
     // Diagnostic counters per subId
     private val tcFireCount = mutableMapOf<Int, Int>()
     private val pslFireCount = mutableMapOf<Int, Int>()
-    // Band history per subId — accumulates bands seen on serving cell + visible neighbors over
-    // the session so SCells (which have no per-CC band data in public APIs) can show something.
-    private val recentBandsBySubId = mutableMapOf<Int, MutableSet<String>>()
 
     private val _caFlow = MutableStateFlow<Map<Int, List<CarrierComponent>>>(emptyMap())
     val caFlow: StateFlow<Map<Int, List<CarrierComponent>>> = _caFlow
@@ -95,11 +92,23 @@ class TelephonyRepository(private val context: Context) {
         // on a single-modem device. Prefer per-SIM ServiceState.NetworkRegistrationInfo cellIdentity;
         // fall back to allCellInfo only when the SS path yields nothing.
         val serving = parseServingFromServiceState(tm, serviceState) ?: parseServingCell(cellInfos)
+        val ssObj = try { tm.signalStrength } catch (e: Exception) { null }
         val signalStrengths = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-                tm.signalStrength?.cellSignalStrengths ?: emptyList()
+                ssObj?.cellSignalStrengths ?: emptyList()
             else emptyList()
         } catch (e: Exception) { emptyList() }
+        // Log raw SignalStrength.toString so we can mine for per-SCell RSRP/SINR that
+        // NetMonster manages to show — Samsung might surface it via a hidden field.
+        ssObj?.let {
+            try {
+                val s = it.toString()
+                if (s.length <= 800) DebugLog.d("SIG", s)
+                else s.chunked(800).forEachIndexed { i, chunk ->
+                    DebugLog.d("SIG", "[${i + 1}] $chunk")
+                }
+            } catch (e: Exception) { /* ignore */ }
+        }
 
         // NSA primary: CellInfoNr in allCellInfo (may need READ_PRECISE_PHONE_STATE on some builds)
         val nrCellInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
@@ -144,26 +153,27 @@ class TelephonyRepository(private val context: Context) {
             else -> "CS"
         }
 
-        // Clear stale CA / band-history when not on LTE/NR — otherwise old aggregation data
+        // Clear stale CA when not on LTE/NR — otherwise old aggregation data
         // from a prior LTE session lingers when the device drops to 3G/2G.
         val isLteOrNr = serving?.rat == "LTE" || serving?.rat == "NR"
         if (!isLteOrNr) {
             caCache.remove(sub.subscriptionId)
-            recentBandsBySubId.remove(sub.subscriptionId)
-        }
-        // Accumulate bands seen in this and prior reads — used to fill SCell band labels
-        // since per-CC band info isn't in any public API.
-        val bandHistory = if (isLteOrNr)
-            recentBandsBySubId.getOrPut(sub.subscriptionId) { mutableSetOf() }
-        else mutableSetOf()
-        if (isLteOrNr) {
-            serving?.band?.let { bandHistory.add(it) }
-            extractBandsFromCellInfo(cellInfos).forEach { bandHistory.add(it) }
         }
 
-        // Attach duplex mode + capability info to the LTE serving cell
-        val servingEnriched = if (serving?.rat == "LTE")
-            serving.copy(duplexMode = duplexModeName(serviceState)) else serving
+        // Parse all per-CC bandwidths from ServiceState.mCellBandwidths — used for both
+        // serving-cell BW fallback AND CA detection. First entry is the PCell.
+        val ssBws = parseCellBandwidthsFromSs(serviceState)
+        val isNtn = parseNtnFromSs(serviceState)
+
+        // Attach duplex mode + bandwidth fallback to LTE serving cell. The first entry
+        // of mCellBandwidths is the active carrier BW (works whether or not CA is active).
+        val servingEnriched = if (serving?.rat == "LTE") {
+            val bwFromSs = ssBws.firstOrNull()?.let { it / 1000.0 }
+            serving.copy(
+                bandwidthMhz = serving.bandwidthMhz ?: bwFromSs,
+                duplexMode = duplexModeName(serviceState)
+            )
+        } else serving
 
         // CA: layered fallback. Callback cache → synchronous reflection → ServiceState
         // mCellBandwidths string parse (proven to work on Samsung) → cell info heuristic.
@@ -171,8 +181,7 @@ class TelephonyRepository(private val context: Context) {
             caCache[sub.subscriptionId] ?: emptyList() else emptyList()
         val direct = if (cached.isEmpty()) parsePhysicalChannelsViaReflection(tm) else emptyList()
         val fromSs = if (cached.isEmpty() && direct.isEmpty())
-            buildCaFromServiceStateBandwidths(serviceState, servingEnriched, bandHistory.toList())
-            else emptyList()
+            buildCaFromBandwidths(ssBws, servingEnriched) else emptyList()
         val ca = when {
             cached.isNotEmpty() -> cached
             direct.isNotEmpty() -> direct
@@ -218,6 +227,7 @@ class TelephonyRepository(private val context: Context) {
             servingCell = servingEnriched,
             nrCell = nrCellDisplay,
             carrierAggregation = ca,
+            isNonTerrestrial = isNtn,
             diagnostics = diagnostics
         )
     }
@@ -709,31 +719,34 @@ class TelephonyRepository(private val context: Context) {
     }
 
     /**
-     * Build CarrierComponent list from ServiceState.mCellBandwidths — Samsung populates this
-     * with one entry per active component carrier (PCell first, then SCells). When the
-     * PhysicalChannelConfig path is blocked, this is our actual data source for CA.
-     * SCell bands are assigned from the accumulated band history (excluding PCell's band).
+     * Parse mCellBandwidths array from ServiceState.toString(). Returns per-CC bandwidths
+     * in kHz (PCell first). Empty list if not present (e.g. 2G/3G where this field is empty).
      */
-    private fun buildCaFromServiceStateBandwidths(
-        ss: ServiceState?,
-        serving: ServingCellInfo?,
-        bandHistory: List<String>
-    ): List<CarrierComponent> {
+    private fun parseCellBandwidthsFromSs(ss: ServiceState?): List<Int> {
         if (ss == null) return emptyList()
         val str = try { ss.toString() } catch (e: Exception) { return emptyList() }
         val match = Regex("mCellBandwidths=\\[([\\d, ]+)]").find(str) ?: return emptyList()
-        val bws = match.groupValues[1].split(",")
+        return match.groupValues[1].split(",")
             .mapNotNull { it.trim().toIntOrNull() }
             .filter { it > 0 }
+    }
+
+    /**
+     * Build CarrierComponent list from per-CC bandwidth array. The Samsung public API
+     * doesn't expose per-SCell band/PCI/EARFCN, so SCell rows show only bandwidth.
+     * Showing guessed bands from neighbor history led to incorrect labels when the
+     * serving cell handed over — better to show nothing than wrong info.
+     */
+    private fun buildCaFromBandwidths(
+        bws: List<Int>,
+        serving: ServingCellInfo?
+    ): List<CarrierComponent> {
         if (bws.size < 2) return emptyList()  // only show as CA when >1 carrier
-        val pcellBand = serving?.band
-        val scellBandPool = bandHistory.filter { it != pcellBand }
         return bws.mapIndexed { idx, bwKhz ->
-            val band = if (idx == 0) pcellBand else scellBandPool.getOrNull(idx - 1)
             CarrierComponent(
                 index = idx,
                 role = if (idx == 0) "PCell" else "SCell",
-                band = band,
+                band = if (idx == 0) serving?.band else null,
                 bandwidthMhz = bwKhz / 1000.0,
                 pci = if (idx == 0) serving?.pci else null,
                 earfcn = if (idx == 0) serving?.earfcn else null,
@@ -743,15 +756,12 @@ class TelephonyRepository(private val context: Context) {
         }
     }
 
-    /** Pull bands out of allCellInfo. CellIdentityLte.bands is API 30+; safe to ignore on older. */
-    private fun extractBandsFromCellInfo(cells: List<CellInfo>): Set<String> {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return emptySet()
-        return cells.filterIsInstance<CellInfoLte>()
-            .flatMap { cell ->
-                try { cell.cellIdentity.bands.map { "B$it" } }
-                catch (e: Throwable) { emptyList() }
-            }
-            .toSet()
+    /** True if the device is camped on a non-terrestrial (satellite) cell. */
+    private fun parseNtnFromSs(ss: ServiceState?): Boolean {
+        if (ss == null) return false
+        val str = try { ss.toString() } catch (e: Exception) { return false }
+        return str.contains("mIsUsingNonTerrestrialNetwork=true") ||
+                str.contains("isNonTerrestrialNetwork=NON_TERRESTRIAL")
     }
 
     /** Map ServiceState.duplexMode() (API 30+) to a human label. */

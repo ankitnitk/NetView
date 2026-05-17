@@ -41,7 +41,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             settingsRepo.refreshSeconds.collect { refreshSeconds = it }
         }
         viewModelScope.launch {
-            settingsRepo.debugLoggingEnabled.collect { DebugLog.enabled = it }
+            settingsRepo.debugLoggingEnabled.collect {
+                DebugLog.enabled = it
+                if (it) DebugLog.i("CFG", "Debug logging enabled")
+            }
         }
         viewModelScope.launch {
             while (isActive) {
@@ -72,6 +75,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setDebugLoggingEnabled(enabled: Boolean) {
+        // Set the flag immediately so the very next log call (typically from the next
+        // refresh tick) is captured — avoids the perception that the toggle "did nothing"
+        // because the flow propagation has a tiny delay.
+        DebugLog.enabled = enabled
+        if (enabled) DebugLog.i("CFG", "Debug logging enabled (toggle)")
         viewModelScope.launch { settingsRepo.setDebugLoggingEnabled(enabled) }
     }
 

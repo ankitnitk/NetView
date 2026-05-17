@@ -17,6 +17,7 @@ data class SimSlotData(
     val servingCell: ServingCellInfo?,
     val nrCell: ServingCellInfo? = null,   // NR leg on NSA — shown alongside LTE anchor
     val carrierAggregation: List<CarrierComponent> = emptyList(),
+    val isNonTerrestrial: Boolean = false, // true when device is on a satellite (NTN) cell
     val diagnostics: DiagnosticInfo = DiagnosticInfo()
 )
 
