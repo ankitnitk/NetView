@@ -31,6 +31,9 @@ class TelephonyRepository(private val context: Context) {
     private val callbacks = mutableMapOf<Int, TelephonyCallback>()
     // Deprecated PhoneStateListener path — works on Samsung where TelephonyCallback silently fails
     private val phoneStateListeners = mutableMapOf<Int, PhoneStateListener>()
+    // Diagnostic counters per subId
+    private val tcFireCount = mutableMapOf<Int, Int>()
+    private val pslFireCount = mutableMapOf<Int, Int>()
 
     private val _caFlow = MutableStateFlow<Map<Int, List<CarrierComponent>>>(emptyMap())
     val caFlow: StateFlow<Map<Int, List<CarrierComponent>>> = _caFlow
@@ -85,22 +88,45 @@ class TelephonyRepository(private val context: Context) {
 
         val cellInfos = try { tm.allCellInfo ?: emptyList() } catch (e: Exception) { emptyList() }
         val serving = parseServingCell(cellInfos)
+        val signalStrengths = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                tm.signalStrength?.cellSignalStrengths ?: emptyList()
+            else emptyList()
+        } catch (e: Exception) { emptyList() }
 
         // NSA primary: CellInfoNr in allCellInfo (may need READ_PRECISE_PHONE_STATE on some builds)
-        val hasNrCell = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                cellInfos.any { it is CellInfoNr }
+        val nrCellInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            cellInfos.filterIsInstance<CellInfoNr>().firstOrNull() else null
+        val hasNrCell = nrCellInfo != null
         // NSA fallback: NR component in SignalStrength (only needs READ_PHONE_STATE — always works)
-        val hasNrSignal = !hasNrCell && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                try {
-                    tm.signalStrength?.cellSignalStrengths?.any { sig ->
-                        sig is CellSignalStrengthNr &&
-                                (sig as CellSignalStrengthNr).ssRsrp != CellInfo.UNAVAILABLE
-                    } ?: false
-                } catch (e: Exception) { false }
+        val nrSignal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            signalStrengths.filterIsInstance<CellSignalStrengthNr>()
+                .firstOrNull { it.ssRsrp != CellInfo.UNAVAILABLE } else null
+        val hasNrSignal = nrSignal != null
         val networkType = when {
             dataType == TelephonyManager.NETWORK_TYPE_NR -> "5G SA"
             (hasNrCell || hasNrSignal) && dataType == TelephonyManager.NETWORK_TYPE_LTE -> "5G NSA"
             else -> Formatters.radioMode(dataType, serviceState)
+        }
+        // Build NR leg display: prefer full CellInfoNr if available, else synthesize from SignalStrength
+        val nrCellDisplay: ServingCellInfo? = when {
+            nrCellInfo != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> parseNr(nrCellInfo)
+            nrSignal != null -> ServingCellInfo(
+                rat = "NR", mcc = null, mnc = null, pci = null, tac = null, cellId = null,
+                enbId = null, gnbId = null, sectorId = null,
+                earfcn = null, nrarfcn = null, uarfcn = null, arfcn = null,
+                band = null, bandwidthMhz = null,
+                rsrp = nrSignal.ssRsrp.takeIf { it != CellInfo.UNAVAILABLE },
+                rsrq = nrSignal.ssRsrq.takeIf { it != CellInfo.UNAVAILABLE },
+                rssnr = null,
+                ssSinr = nrSignal.ssSinr.takeIf { it != CellInfo.UNAVAILABLE },
+                csiRsrp = nrSignal.csiRsrp.takeIf { it != CellInfo.UNAVAILABLE },
+                csiRsrq = nrSignal.csiRsrq.takeIf { it != CellInfo.UNAVAILABLE },
+                csiSinr = nrSignal.csiSinr.takeIf { it != CellInfo.UNAVAILABLE },
+                rscp = null, ecNo = null, rssi = null, cqi = null,
+                timingAdvance = null, bsic = null, ber = null
+            )
+            else -> null
         }
 
         val volte = isVolteRegistered(tm)
@@ -126,6 +152,19 @@ class TelephonyRepository(private val context: Context) {
         val servingMcc = operatorNumeric?.take(3)
         val servingMnc = operatorNumeric?.drop(3)
 
+        val diagnostics = DiagnosticInfo(
+            cellInfoTotal = cellInfos.size,
+            cellInfoLte = cellInfos.count { it is CellInfoLte },
+            cellInfoNr = cellInfos.count { it is CellInfoNr },
+            signalStrengthsTotal = signalStrengths.size,
+            signalStrengthsLte = signalStrengths.count { it is CellSignalStrengthLte },
+            signalStrengthsNr = signalStrengths.count { it is CellSignalStrengthNr },
+            tcRegistered = callbacks.containsKey(sub.subscriptionId),
+            tcFires = tcFireCount[sub.subscriptionId] ?: 0,
+            pslRegistered = phoneStateListeners.containsKey(sub.subscriptionId),
+            pslFires = pslFireCount[sub.subscriptionId] ?: 0
+        )
+
         return SimSlotData(
             subId = sub.subscriptionId,
             slotIndex = sub.simSlotIndex,
@@ -138,7 +177,9 @@ class TelephonyRepository(private val context: Context) {
             voiceTech = voiceTech,
             imsRegistered = volte || vonr,
             servingCell = serving,
-            carrierAggregation = ca
+            nrCell = nrCellDisplay,
+            carrierAggregation = ca,
+            diagnostics = diagnostics
         )
     }
 
@@ -377,6 +418,7 @@ class TelephonyRepository(private val context: Context) {
 
         val cb = object : TelephonyCallback(), TelephonyCallback.PhysicalChannelConfigListener {
             override fun onPhysicalChannelConfigChanged(configs: MutableList<PhysicalChannelConfig>) {
+                tcFireCount[subId] = (tcFireCount[subId] ?: 0) + 1
                 val list = configs.mapIndexed { idx, cfg -> physicalChannelToCarrier(idx, cfg) }
                 caCache[subId] = list
                 _caFlow.value = caCache.toMap()
@@ -412,9 +454,19 @@ class TelephonyRepository(private val context: Context) {
         } catch (e: Throwable) { 0x00100000 }  // documented value
         val tm = telephonyManager.createForSubscriptionId(subId)
         val listener = object : PhoneStateListener() {
-            // No `override` — method is @SystemApi, hidden. JVM matches by signature at runtime.
+            // No `override` — both methods are @SystemApi (hidden from compiler).
+            // JVM matches by signature at runtime. Android used different names in different
+            // releases, so we define BOTH and whichever the framework calls will fire.
             @Suppress("unused")
             fun onPhysicalChannelConfigurationChanged(configs: List<PhysicalChannelConfig>) {
+                handleConfigs(configs)
+            }
+            @Suppress("unused")
+            fun onPhysicalChannelConfigChanged(configs: List<PhysicalChannelConfig>) {
+                handleConfigs(configs)
+            }
+            private fun handleConfigs(configs: List<PhysicalChannelConfig>) {
+                pslFireCount[subId] = (pslFireCount[subId] ?: 0) + 1
                 val list = configs.mapIndexed { idx, cfg -> physicalChannelToCarrier(idx, cfg) }
                 caCache[subId] = list
                 _caFlow.value = caCache.toMap()

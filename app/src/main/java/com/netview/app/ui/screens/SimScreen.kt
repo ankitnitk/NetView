@@ -135,6 +135,25 @@ fun SimScreen(
             rows = listOf("Status" to "No cell info — check permissions")
         )
 
+        // 5G NR leg (NSA only — companion to the LTE anchor)
+        sim.nrCell?.let { nr ->
+            val rows = mutableListOf<Pair<String, String>>()
+            rows += "RAT" to "NR (NSA secondary)"
+            nr.gnbId?.let { rows += "gNB ID" to Formatters.longOrDash(it) }
+            nr.cellId?.let { rows += "NCI" to Formatters.longOrDash(it) }
+            nr.pci?.let { rows += "NR PCI" to Formatters.intOrDash(it) }
+            nr.tac?.let { rows += "NR TAC" to Formatters.intOrDash(it) }
+            nr.nrarfcn?.let { rows += "NR ARFCN" to Formatters.intOrDash(it) }
+            nr.band?.let { rows += "NR Band" to it }
+            rows += "SS-RSRP" to Formatters.signedOrDash(nr.rsrp, "dBm")
+            rows += "SS-RSRQ" to Formatters.signedOrDash(nr.rsrq, "dB")
+            rows += "SS-SINR" to Formatters.signedOrDash(nr.ssSinr, "dB")
+            nr.csiRsrp?.let { rows += "CSI-RSRP" to Formatters.signedOrDash(it, "dBm") }
+            nr.csiRsrq?.let { rows += "CSI-RSRQ" to Formatters.signedOrDash(it, "dB") }
+            nr.csiSinr?.let { rows += "CSI-SINR" to Formatters.signedOrDash(it, "dB") }
+            InfoCard(title = "5G NR Leg", rows = rows)
+        }
+
         // Carrier Aggregation
         if (sim.carrierAggregation.isNotEmpty()) {
             val rows = mutableListOf<Pair<String, String>>()
@@ -175,6 +194,18 @@ fun SimScreen(
         } ?: InfoCard(
             title = "Location",
             rows = listOf("Status" to "Acquiring GPS fix…")
+        )
+
+        // Diagnostics — shows whether the CA listeners are receiving data
+        val d = sim.diagnostics
+        InfoCard(
+            title = "Diagnostics",
+            rows = listOf(
+                "Cells (allCellInfo)" to "${d.cellInfoTotal} (LTE ${d.cellInfoLte}, NR ${d.cellInfoNr})",
+                "SignalStrengths" to "${d.signalStrengthsTotal} (LTE ${d.signalStrengthsLte}, NR ${d.signalStrengthsNr})",
+                "TelephonyCallback (CA)" to "${if (d.tcRegistered) "✓" else "✗"} • fires=${d.tcFires}",
+                "PhoneStateListener (CA)" to "${if (d.pslRegistered) "✓" else "✗"} • fires=${d.pslFires}"
+            )
         )
 
         Spacer(Modifier.height(24.dp))

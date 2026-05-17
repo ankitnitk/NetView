@@ -15,7 +15,23 @@ data class SimSlotData(
     val voiceTech: String,         // VoLTE / VoNR / CS
     val imsRegistered: Boolean,
     val servingCell: ServingCellInfo?,
-    val carrierAggregation: List<CarrierComponent> = emptyList()
+    val nrCell: ServingCellInfo? = null,   // NR leg on NSA — shown alongside LTE anchor
+    val carrierAggregation: List<CarrierComponent> = emptyList(),
+    val diagnostics: DiagnosticInfo = DiagnosticInfo()
+)
+
+/** Diagnostic counters surfaced in the UI so we can see what Samsung is actually giving us. */
+data class DiagnosticInfo(
+    val cellInfoTotal: Int = 0,
+    val cellInfoLte: Int = 0,
+    val cellInfoNr: Int = 0,
+    val signalStrengthsTotal: Int = 0,
+    val signalStrengthsLte: Int = 0,
+    val signalStrengthsNr: Int = 0,
+    val tcRegistered: Boolean = false,
+    val tcFires: Int = 0,
+    val pslRegistered: Boolean = false,
+    val pslFires: Int = 0
 )
 
 /**
