@@ -138,13 +138,17 @@ class TelephonyRepository(private val context: Context) {
             else -> "CS"
         }
 
-        // CA: layered fallback. Callback cache → synchronous reflection → cell info heuristic.
+        // CA: layered fallback. Callback cache → synchronous reflection → ServiceState
+        // mCellBandwidths string parse (proven to work on Samsung) → cell info heuristic.
         val cached = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             caCache[sub.subscriptionId] ?: emptyList() else emptyList()
         val direct = if (cached.isEmpty()) parsePhysicalChannelsViaReflection(tm) else emptyList()
+        val fromSs = if (cached.isEmpty() && direct.isEmpty())
+            buildCaFromServiceStateBandwidths(serviceState, serving) else emptyList()
         val ca = when {
             cached.isNotEmpty() -> cached
             direct.isNotEmpty() -> direct
+            fromSs.isNotEmpty() -> fromSs
             else -> detectCaFromCellInfo(cellInfos)
         }
 
@@ -509,20 +513,57 @@ class TelephonyRepository(private val context: Context) {
     }
 
     /**
-     * Last-ditch CA detection by string-parsing ServiceState.toString(). Samsung's ServiceState
-     * often includes fields like mIsUsingCarrierAggregation, mNrFrequencyRange, etc. that aren't
-     * exposed via public getters. Logged to DebugLog so the user can inspect the raw string.
+     * String-parse ServiceState for diagnostic info (Samsung exposes carrier-aggregation flag,
+     * NR frequency range, channel bandwidth array, etc. only in toString output).
      */
     private fun parseServiceStateForCaHint(ss: ServiceState?): String? {
         if (ss == null) return null
         val str = try { ss.toString() } catch (e: Exception) { return null }
-        DebugLog.d("SS", "len=${str.length} excerpt=${str.take(400)}")
+        // Log in 800-char chunks so we see ALL the fields, not just the first ones
+        if (str.length > 0) {
+            val chunks = str.chunked(800)
+            chunks.forEachIndexed { i, chunk ->
+                DebugLog.d("SS", "[${i + 1}/${chunks.size}] $chunk")
+            }
+        }
         val ca = Regex("(?:mIsUsingCarrierAggregation|isUsingCarrierAggregation)=(true|false)")
             .find(str)?.groupValues?.get(1)
         val nrFreq = Regex("mNrFrequencyRange=(\\d+)").find(str)?.groupValues?.get(1)
+        val bws = Regex("mCellBandwidths=\\[([\\d, ]+)]").find(str)?.groupValues?.get(1)
         val parts = mutableListOf<String>()
+        if (bws != null) parts += "BWs=[$bws]"
         if (ca != null) parts += "CA=$ca"
         if (nrFreq != null) parts += "NR-FR=$nrFreq"
         return parts.joinToString(" ").ifBlank { null }
+    }
+
+    /**
+     * Build CarrierComponent list from ServiceState.mCellBandwidths — Samsung populates this
+     * with one entry per active component carrier (PCell first, then SCells). When the
+     * PhysicalChannelConfig path is blocked, this is our actual data source for CA.
+     */
+    private fun buildCaFromServiceStateBandwidths(
+        ss: ServiceState?,
+        serving: ServingCellInfo?
+    ): List<CarrierComponent> {
+        if (ss == null) return emptyList()
+        val str = try { ss.toString() } catch (e: Exception) { return emptyList() }
+        val match = Regex("mCellBandwidths=\\[([\\d, ]+)]").find(str) ?: return emptyList()
+        val bws = match.groupValues[1].split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .filter { it > 0 }
+        if (bws.size < 2) return emptyList()  // only show as CA when >1 carrier
+        return bws.mapIndexed { idx, bwKhz ->
+            CarrierComponent(
+                index = idx,
+                role = if (idx == 0) "PCell" else "SCell",
+                band = if (idx == 0) serving?.band else null,
+                bandwidthMhz = bwKhz / 1000.0,
+                pci = if (idx == 0) serving?.pci else null,
+                earfcn = if (idx == 0) serving?.earfcn else null,
+                downlinkFrequencyMhz = null,
+                mimoLayers = null
+            )
+        }
     }
 }

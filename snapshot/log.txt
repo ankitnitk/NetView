@@ -1,0 +1,102 @@
+18:10:07.447 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:07.465 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:07.467 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:07.469 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:07.496 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:07.531 D/SS: len=2792 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=0, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=18(IWLAN), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCd
+18:10:07.753 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:07.755 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:07.766 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:07.768 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:07.776 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:07.782 D/SS: len=2792 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=0, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=18(IWLAN), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCd
+18:10:09.788 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:09.791 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:09.792 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:09.793 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:09.799 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:09.810 D/SS: len=2792 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=0, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=18(IWLAN), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCd
+18:10:11.816 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:11.818 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:11.819 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:11.821 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:11.826 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:11.831 D/SS: len=2792 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=0, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=18(IWLAN), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCd
+18:10:13.837 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:13.840 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:13.843 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:13.844 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:13.849 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:13.855 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:15.872 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:15.879 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:15.882 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:15.889 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:15.896 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:15.903 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:17.915 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:17.919 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:17.920 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:17.922 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:17.928 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:17.934 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:19.943 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:19.946 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:19.948 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:19.951 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:19.957 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:19.965 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:21.979 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:21.984 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:21.985 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:21.988 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:21.994 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:22.001 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:24.012 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:24.016 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:24.019 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:24.022 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:24.031 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:24.038 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:26.049 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:26.052 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:26.054 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:26.057 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:26.063 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:26.069 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:28.076 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:28.078 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:28.079 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:28.081 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:28.087 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:28.093 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:30.110 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:30.113 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:30.115 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:30.117 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:30.126 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:30.135 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:32.141 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:32.144 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:32.145 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:32.147 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:32.153 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:32.159 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:34.166 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:34.169 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:34.170 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:34.172 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:34.177 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:34.183 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:36.196 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:36.200 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:36.202 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:36.204 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:36.210 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+18:10:36.216 D/SS: len=2791 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndicator=-1, mCdma
+18:10:37.637 W/TC: registerTelephonyCallback FAILED sub=25: SecurityException: listen
+18:10:37.642 I/PSL: tm.listen OK sub=25 event=0x100000
+18:10:37.645 W/TC: registerTelephonyCallback FAILED sub=3: SecurityException: listen
+18:10:37.648 I/PSL: tm.listen OK sub=3 event=0x100000
+18:10:37.655 D/SS: len=2788 excerpt={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=6300, duplexMode()=1, mCellBandwidths=[10000, 10000, 15000], mOperatorAlphaLong=SaveNaAirtelMoney, mOperatorAlphaShort=SaveNaAirtelMoney, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, mNetworkId=*1, mSystemId=*1, mCdmaRoamingIndic
+

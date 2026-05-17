@@ -73,8 +73,10 @@ fun SimScreen(
                     rows += "TAC" to Formatters.intOrDash(c.tac)
                     rows += "EARFCN" to Formatters.intOrDash(c.earfcn)
                     rows += "Band" to Formatters.stringOrDash(c.band)
+                    // Bandwidth: cell-identity bandwidth → PCell from CA list (which on
+                    // Samsung comes from ServiceState.mCellBandwidths parse)
                     val bw = c.bandwidthMhz
-                        ?: sim.carrierAggregation.firstOrNull { it.role == "PCell" }?.bandwidthMhz
+                        ?: sim.carrierAggregation.firstOrNull()?.bandwidthMhz
                     rows += "Bandwidth" to (bw?.let { "%.1f MHz".format(it) } ?: "—")
                 }
                 "NR" -> {
@@ -157,12 +159,22 @@ fun SimScreen(
         // Carrier Aggregation
         if (sim.carrierAggregation.isNotEmpty()) {
             val rows = mutableListOf<Pair<String, String>>()
+            val bwSummary = sim.carrierAggregation
+                .mapNotNull { it.bandwidthMhz?.let { v -> "%.0f".format(v) } }
+                .joinToString(" + ")
+            val totalBw = sim.carrierAggregation.sumOf { it.bandwidthMhz ?: 0.0 }
             val bandSummary = sim.carrierAggregation
                 .mapNotNull { it.band?.removePrefix("Band ")?.let { b -> "B$b" } }
                 .distinct()
                 .joinToString(" + ")
                 .ifBlank { "${sim.carrierAggregation.size} CC" }
-            rows += "CA Status" to "Active • $bandSummary"
+            rows += "CA Status" to "Active • ${sim.carrierAggregation.size}CC"
+            if (bwSummary.isNotBlank()) {
+                rows += "Bandwidths" to "$bwSummary MHz  (Σ ${"%.0f".format(totalBw)} MHz)"
+            }
+            if (bandSummary.isNotBlank() && bandSummary != "${sim.carrierAggregation.size} CC") {
+                rows += "Bands" to bandSummary
+            }
             sim.carrierAggregation.forEach { cc ->
                 val freq = cc.downlinkFrequencyMhz?.let { " @ %.1f MHz".format(it) } ?: ""
                 val bw = cc.bandwidthMhz?.let { " %.1f MHz".format(it) } ?: ""
