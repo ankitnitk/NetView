@@ -9,6 +9,7 @@ import android.telephony.*
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.netview.app.utils.BandMapper
+import com.netview.app.utils.DebugLog
 import com.netview.app.utils.Formatters
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -152,17 +153,23 @@ class TelephonyRepository(private val context: Context) {
         val servingMcc = operatorNumeric?.take(3)
         val servingMnc = operatorNumeric?.drop(3)
 
+        val validCi = cellInfos.filterIsInstance<CellInfoLte>().count {
+            it.cellIdentity.ci != CellInfo.UNAVAILABLE && it.cellIdentity.ci > 0
+        }
+        val caHint = parseServiceStateForCaHint(serviceState)
         val diagnostics = DiagnosticInfo(
             cellInfoTotal = cellInfos.size,
             cellInfoLte = cellInfos.count { it is CellInfoLte },
             cellInfoNr = cellInfos.count { it is CellInfoNr },
+            cellsWithValidCi = validCi,
             signalStrengthsTotal = signalStrengths.size,
             signalStrengthsLte = signalStrengths.count { it is CellSignalStrengthLte },
             signalStrengthsNr = signalStrengths.count { it is CellSignalStrengthNr },
             tcRegistered = callbacks.containsKey(sub.subscriptionId),
             tcFires = tcFireCount[sub.subscriptionId] ?: 0,
             pslRegistered = phoneStateListeners.containsKey(sub.subscriptionId),
-            pslFires = pslFireCount[sub.subscriptionId] ?: 0
+            pslFires = pslFireCount[sub.subscriptionId] ?: 0,
+            serviceStateCaHint = caHint
         )
 
         return SimSlotData(
@@ -419,6 +426,7 @@ class TelephonyRepository(private val context: Context) {
         val cb = object : TelephonyCallback(), TelephonyCallback.PhysicalChannelConfigListener {
             override fun onPhysicalChannelConfigChanged(configs: MutableList<PhysicalChannelConfig>) {
                 tcFireCount[subId] = (tcFireCount[subId] ?: 0) + 1
+                DebugLog.i("TC", "fire sub=$subId configs=${configs.size}")
                 val list = configs.mapIndexed { idx, cfg -> physicalChannelToCarrier(idx, cfg) }
                 caCache[subId] = list
                 _caFlow.value = caCache.toMap()
@@ -427,8 +435,9 @@ class TelephonyRepository(private val context: Context) {
         try {
             tm.registerTelephonyCallback(executor, cb)
             callbacks[subId] = cb
+            DebugLog.i("TC", "registerTelephonyCallback OK sub=$subId")
         } catch (e: Exception) {
-            // ignore; CA info just won't be available
+            DebugLog.w("TC", "registerTelephonyCallback FAILED sub=$subId: ${e.javaClass.simpleName}: ${e.message}")
         }
     }
 
@@ -467,6 +476,7 @@ class TelephonyRepository(private val context: Context) {
             }
             private fun handleConfigs(configs: List<PhysicalChannelConfig>) {
                 pslFireCount[subId] = (pslFireCount[subId] ?: 0) + 1
+                DebugLog.i("PSL", "fire sub=$subId configs=${configs.size}")
                 val list = configs.mapIndexed { idx, cfg -> physicalChannelToCarrier(idx, cfg) }
                 caCache[subId] = list
                 _caFlow.value = caCache.toMap()
@@ -475,7 +485,10 @@ class TelephonyRepository(private val context: Context) {
         try {
             tm.listen(listener, event)
             phoneStateListeners[subId] = listener
-        } catch (e: Throwable) { /* ignore */ }
+            DebugLog.i("PSL", "tm.listen OK sub=$subId event=0x${event.toString(16)}")
+        } catch (e: Throwable) {
+            DebugLog.w("PSL", "tm.listen FAILED sub=$subId: ${e.javaClass.simpleName}: ${e.message}")
+        }
     }
 
     fun release() {
@@ -493,5 +506,23 @@ class TelephonyRepository(private val context: Context) {
             }
             phoneStateListeners.clear()
         }
+    }
+
+    /**
+     * Last-ditch CA detection by string-parsing ServiceState.toString(). Samsung's ServiceState
+     * often includes fields like mIsUsingCarrierAggregation, mNrFrequencyRange, etc. that aren't
+     * exposed via public getters. Logged to DebugLog so the user can inspect the raw string.
+     */
+    private fun parseServiceStateForCaHint(ss: ServiceState?): String? {
+        if (ss == null) return null
+        val str = try { ss.toString() } catch (e: Exception) { return null }
+        DebugLog.d("SS", "len=${str.length} excerpt=${str.take(400)}")
+        val ca = Regex("(?:mIsUsingCarrierAggregation|isUsingCarrierAggregation)=(true|false)")
+            .find(str)?.groupValues?.get(1)
+        val nrFreq = Regex("mNrFrequencyRange=(\\d+)").find(str)?.groupValues?.get(1)
+        val parts = mutableListOf<String>()
+        if (ca != null) parts += "CA=$ca"
+        if (nrFreq != null) parts += "NR-FR=$nrFreq"
+        return parts.joinToString(" ").ifBlank { null }
     }
 }

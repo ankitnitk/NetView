@@ -13,6 +13,7 @@ import com.netview.app.data.SettingsRepository
 fun SettingsScreen(
     currentRefreshSeconds: Int,
     onRefreshChange: (Int) -> Unit,
+    onOpenDebugLog: () -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -60,6 +61,20 @@ fun SettingsScreen(
                         Text("1s", style = MaterialTheme.typography.labelSmall)
                         Text("60s", style = MaterialTheme.typography.labelSmall)
                     }
+                }
+            }
+
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Debug", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "View internal log entries to diagnose CA/BW/MIMO availability on this device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = onOpenDebugLog) { Text("View Debug Log") }
                 }
             }
 

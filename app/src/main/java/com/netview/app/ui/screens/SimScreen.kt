@@ -200,11 +200,13 @@ fun SimScreen(
         val d = sim.diagnostics
         InfoCard(
             title = "Diagnostics",
-            rows = listOf(
+            rows = listOfNotNull(
                 "Cells (allCellInfo)" to "${d.cellInfoTotal} (LTE ${d.cellInfoLte}, NR ${d.cellInfoNr})",
+                "Cells w/ valid CI" to "${d.cellsWithValidCi} / ${d.cellInfoLte}",
                 "SignalStrengths" to "${d.signalStrengthsTotal} (LTE ${d.signalStrengthsLte}, NR ${d.signalStrengthsNr})",
                 "TelephonyCallback (CA)" to "${if (d.tcRegistered) "✓" else "✗"} • fires=${d.tcFires}",
-                "PhoneStateListener (CA)" to "${if (d.pslRegistered) "✓" else "✗"} • fires=${d.pslFires}"
+                "PhoneStateListener (CA)" to "${if (d.pslRegistered) "✓" else "✗"} • fires=${d.pslFires}",
+                d.serviceStateCaHint?.let { "ServiceState hint" to it }
             )
         )
 

@@ -15,6 +15,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.netview.app.data.SettingsRepository
+import com.netview.app.ui.screens.DebugLogScreen
 import com.netview.app.ui.screens.MainScreen
 import com.netview.app.ui.screens.SettingsScreen
 import com.netview.app.ui.theme.NetViewTheme
@@ -101,8 +102,12 @@ class MainActivity : ComponentActivity() {
                 SettingsScreen(
                     currentRefreshSeconds = refresh,
                     onRefreshChange = { viewModel.setRefreshSeconds(it) },
+                    onOpenDebugLog = { nav.navigate("debug_log") },
                     onBack = { nav.popBackStack() }
                 )
+            }
+            composable("debug_log") {
+                DebugLogScreen(onBack = { nav.popBackStack() })
             }
         }
     }

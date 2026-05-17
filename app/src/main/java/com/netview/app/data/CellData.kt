@@ -25,13 +25,15 @@ data class DiagnosticInfo(
     val cellInfoTotal: Int = 0,
     val cellInfoLte: Int = 0,
     val cellInfoNr: Int = 0,
+    val cellsWithValidCi: Int = 0,       // how many of cellInfoLte have non-sanitized CI
     val signalStrengthsTotal: Int = 0,
     val signalStrengthsLte: Int = 0,
     val signalStrengthsNr: Int = 0,
     val tcRegistered: Boolean = false,
     val tcFires: Int = 0,
     val pslRegistered: Boolean = false,
-    val pslFires: Int = 0
+    val pslFires: Int = 0,
+    val serviceStateCaHint: String? = null   // parsed from ServiceState.toString()
 )
 
 /**
