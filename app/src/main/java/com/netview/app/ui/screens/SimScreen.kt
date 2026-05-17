@@ -78,6 +78,7 @@ fun SimScreen(
                     val bw = c.bandwidthMhz
                         ?: sim.carrierAggregation.firstOrNull()?.bandwidthMhz
                     rows += "Bandwidth" to (bw?.let { "%.1f MHz".format(it) } ?: "—")
+                    c.duplexMode?.let { rows += "Duplex Mode" to it }
                 }
                 "NR" -> {
                     rows += "gNB ID" to Formatters.longOrDash(c.gnbId)

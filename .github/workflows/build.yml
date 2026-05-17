@@ -9,6 +9,9 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: write   # needed for softprops/action-gh-release to create/update releases
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,14 +40,40 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
+      - name: Read version
+        id: ver
+        run: |
+          v=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "name=$v" >> "$GITHUB_OUTPUT"
+
       - name: Rename APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk out/NetView-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "out/NetView-${{ steps.ver.outputs.name }}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk out/NetView-latest.apk
 
-      - name: Upload APK artifact
+      - name: Upload APK artifact (also keeps a CI download for 30 days)
         uses: actions/upload-artifact@v4
         with:
           name: NetView-APK
-          path: out/NetView-debug.apk
+          path: out/NetView-*.apk
           retention-days: 30
+
+      - name: Publish/refresh "Latest" GitHub Release with APK
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: NetView ${{ steps.ver.outputs.name }} (latest)
+          body: |
+            Automatic build from `main` branch.
+            Commit: ${{ github.sha }}
+
+            Download `NetView-latest.apk` below and install on your phone (allow Unknown Sources).
+          files: |
+            out/NetView-${{ steps.ver.outputs.name }}.apk
+            out/NetView-latest.apk
+          prerelease: false
+          make_latest: "true"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

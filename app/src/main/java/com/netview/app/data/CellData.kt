@@ -71,7 +71,8 @@ data class ServingCellInfo(
     val cqi: Int?,
     val timingAdvance: Int?,
     val bsic: Int?,            // GSM
-    val ber: Int?              // GSM
+    val ber: Int?,             // GSM
+    val duplexMode: String? = null // FDD / TDD (LTE serving cell only)
 )
 
 /**
