@@ -23,9 +23,10 @@ fun InfoCard(
     title: String,
     rows: List<Pair<String, String>>,
     collapsible: Boolean = false,
+    initiallyExpanded: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
 
     Card(
         modifier = modifier.fillMaxWidth(),

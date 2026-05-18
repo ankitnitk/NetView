@@ -240,7 +240,7 @@ class TelephonyRepository(private val context: Context) {
             carrierAggregation = ca,
             isNonTerrestrial = isNtn,
             diagnostics = diagnostics,
-            neighborCells = parseNeighborCells(cellInfos),
+            neighborCells = parseNeighborCells(cellInfos, servingEnriched?.earfcn),
         )
     }
 
@@ -697,7 +697,7 @@ class TelephonyRepository(private val context: Context) {
         }
     }
 
-    private fun parseNeighborCells(cellInfos: List<CellInfo>): List<NeighborCell> {
+    private fun parseNeighborCells(cellInfos: List<CellInfo>, servingEarfcn: Int?): List<NeighborCell> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return emptyList()
         return cellInfos.filterIsInstance<CellInfoLte>()
             .filter { !it.isRegistered }
@@ -707,6 +707,9 @@ class TelephonyRepository(private val context: Context) {
                 val pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE } ?: return@mapNotNull null
                 val rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE } ?: return@mapNotNull null
                 val earfcn = id.earfcn.takeIf { it != CellInfo.UNAVAILABLE }
+                // On single-modem DSDS, allCellInfo is shared across both SIMs.
+                // Filter by serving EARFCN so SIM2's serving cell doesn't appear as SIM1's neighbour.
+                if (servingEarfcn != null && earfcn != null && earfcn != servingEarfcn) return@mapNotNull null
                 NeighborCell(
                     rat = "LTE",
                     pci = pci,

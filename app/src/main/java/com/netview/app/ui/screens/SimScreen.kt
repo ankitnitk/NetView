@@ -253,34 +253,6 @@ fun SimScreen(
             )
         }
 
-        // Neighbour Cells (LTE only — CID unavailable so no CM key match, use PCI+EARFCN for CM lookup)
-        if (sim.neighborCells.isNotEmpty()) {
-            val rows = mutableListOf<Pair<String, String>>()
-            sim.neighborCells.forEach { n ->
-                rows += "PCI ${n.pci ?: "—"}" to "${n.band ?: "—"} • EARFCN ${earfcnWithFreq(n.earfcn)}"
-                val sigParts = buildList {
-                    n.rsrp?.let { add("RSRP $it dBm") }
-                    n.rsrq?.let { add("RSRQ $it dB") }
-                }
-                if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
-                if (n.pci != null && n.earfcn != null && cmNeighborLookup != null) {
-                    cmNeighborLookup(n.pci, n.earfcn)?.let { cm ->
-                        val cmParts = buildList {
-                            cm.rsPowerDbm?.let { add("RS Power $it dBm") }
-                            cm.tiltTenthDeg?.let { add("Tilt ${"%.1f".format(it / 10.0)}°") }
-                            cm.dlRsBoost?.let { add("RS Boost $it dB") }
-                        }
-                        if (cmParts.isNotEmpty()) rows += "  Config" to cmParts.joinToString("  ")
-                    }
-                }
-            }
-            InfoCard(
-                title = "Neighbour Cells (${sim.neighborCells.size})",
-                rows = rows,
-                collapsible = true
-            )
-        }
-
         // Configuration as per CM Dump — RAT-specific cards
         val rat = sim.servingCell?.rat
         if (rat == "LTE" && cmExportLoaded) {
@@ -357,6 +329,35 @@ fun SimScreen(
                 title = "Configuration as per CM Dump",
                 rows = cmRows,
                 collapsible = true
+            )
+        }
+
+        // Neighbour Cells — collapsible, default collapsed, shown at the bottom
+        if (sim.neighborCells.isNotEmpty()) {
+            val rows = mutableListOf<Pair<String, String>>()
+            sim.neighborCells.forEach { n ->
+                rows += "PCI ${n.pci ?: "—"}" to "${n.band ?: "—"} • EARFCN ${earfcnWithFreq(n.earfcn)}"
+                val sigParts = buildList {
+                    n.rsrp?.let { add("RSRP $it dBm") }
+                    n.rsrq?.let { add("RSRQ $it dB") }
+                }
+                if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
+                if (n.pci != null && n.earfcn != null && cmNeighborLookup != null) {
+                    cmNeighborLookup(n.pci, n.earfcn)?.let { cm ->
+                        val cmParts = buildList {
+                            cm.rsPowerDbm?.let { add("RS Power $it dBm") }
+                            cm.tiltTenthDeg?.let { add("Tilt ${"%.1f".format(it / 10.0)}°") }
+                            cm.dlRsBoost?.let { add("RS Boost $it dB") }
+                        }
+                        if (cmParts.isNotEmpty()) rows += "  Config" to cmParts.joinToString("  ")
+                    }
+                }
+            }
+            InfoCard(
+                title = "Neighbour Cells (${sim.neighborCells.size})",
+                rows = rows,
+                collapsible = true,
+                initiallyExpanded = false
             )
         }
 
