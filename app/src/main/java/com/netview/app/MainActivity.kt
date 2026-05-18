@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     onOpenSettings = { nav.navigate("settings") },
-                    cmExportLookup = { pci, earfcn -> viewModel.lookupCmExport(pci, earfcn) }
+                    cmExportLookup = { enbId, sectorId -> viewModel.lookupCmExport(enbId, sectorId) }
                 )
             }
             composable("settings") {

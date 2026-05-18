@@ -16,7 +16,8 @@ class CmExportRepository {
     private val _cells = MutableStateFlow<Map<Pair<Int, Int>, CmExportCell>>(emptyMap())
     val cells: StateFlow<Map<Pair<Int, Int>, CmExportCell>> = _cells
 
-    fun lookup(pci: Int, earfcn: Int): CmExportCell? = _cells.value[Pair(pci, earfcn)]
+    /** Match on eNB ID (= CID/256 from phone) + LCR/sector ID (= CID%256) = LNBTS ID + LNCEL ID. */
+    fun lookup(enbId: Int, lncelId: Int): CmExportCell? = _cells.value[Pair(enbId, lncelId)]
 
     fun clear() { _cells.value = emptyMap() }
 
@@ -61,9 +62,8 @@ class CmExportRepository {
             val strings = parseSharedStrings(ssBytes.inputStream())
             val parsed = parseLncelSheet(sheetBytes.inputStream(), strings)
 
-            // Index by (PCI, EARFCN). Duplicate keys (same PCI+EARFCN across different sectors
-            // in the export) keep the last entry — this is rare in practice.
-            val map = parsed.associateBy { Pair(it.pci, it.earfcn) }
+            // Index by (LNBTS ID, LNCEL ID) = (eNB ID, sector/LCR ID). Unique per cell.
+            val map = parsed.associateBy { Pair(it.lnbtsId, it.lncelId) }
             _cells.value = map
             Result.success(map.size)
         } catch (e: Exception) {
@@ -179,17 +179,18 @@ class CmExportRepository {
         // Invert colMap to field-name → value for this row
         val fields = row.entries.associate { (col, value) -> (colMap[col] ?: "") to value }
 
-        val pci = fields["PCI"]?.toIntOrNull() ?: return null
-        val earfcn = fields["EARFCN DL"]?.toIntOrNull() ?: return null
+        val lnbtsId = fields["LNBTS ID"]?.toIntOrNull() ?: return null
+        val lncelId = fields["LNCEL ID"]?.toIntOrNull() ?: return null
         val lnbtsName = fields["LNBTS Name"]?.takeIf { it.isNotBlank() } ?: return null
         val lncelName = fields["LNCEL Name"]?.takeIf { it.isNotBlank() } ?: return null
 
         return CmExportCell(
-            lnbtsId = fields["LNBTS ID"]?.toIntOrNull() ?: 0,
+            lnbtsId = lnbtsId,
+            lncelId = lncelId,
             lnbtsName = lnbtsName,
             lncelName = lncelName,
-            pci = pci,
-            earfcn = earfcn,
+            pci = fields["PCI"]?.toIntOrNull(),
+            earfcn = fields["EARFCN DL"]?.toIntOrNull(),
             pmaxDbm = fields["PMAX (dBm)"]?.toDoubleOrNull(),
             dlRsBoost = fields["dlRsBoost"]?.toDoubleOrNull(),
             dlMimoMode = fields["DL MIMO Mode"]?.takeIf { it.isNotBlank() },

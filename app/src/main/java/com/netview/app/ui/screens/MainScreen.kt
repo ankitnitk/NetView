@@ -23,7 +23,7 @@ fun MainScreen(
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
     onOpenSettings: () -> Unit,
-    cmExportLookup: ((Int, Int) -> CmExportCell?)? = null
+    cmExportLookup: ((Long?, Int?) -> CmExportCell?)? = null
 ) {
     Scaffold(
         topBar = {
@@ -69,9 +69,7 @@ fun MainScreen(
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                 val sim = sims[page]
                 val cmCell = sim.servingCell?.let { cell ->
-                    val pci = cell.pci ?: return@let null
-                    val earfcn = cell.earfcn ?: return@let null
-                    cmExportLookup?.invoke(pci, earfcn)
+                    cmExportLookup?.invoke(cell.enbId, cell.sectorId)
                 }
                 SimScreen(sim = sim, location = location, cmExportCell = cmCell)
             }
