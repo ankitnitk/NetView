@@ -142,7 +142,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val txBytes = TrafficStats.getMobileTxBytes()
         var dlMbps: Double? = null
         var ulMbps: Double? = null
-        if (rxBytes != TrafficStats.UNSUPPORTED && txBytes != TrafficStats.UNSUPPORTED) {
+        if (rxBytes >= 0 && txBytes >= 0) {
             val prev = lastTraffic
             if (prev != null) {
                 val dtSec = (now - prev.timeMs) / 1000.0
