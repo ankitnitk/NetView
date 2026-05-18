@@ -47,11 +47,28 @@ object EarfcnUtils {
         Band(41590, 43589, 3400.0, 41590), // B42
         Band(43590, 45589, 3600.0, 43590), // B43
         Band(45590, 46589, 703.0, 45590),  // B44
+        Band(46790, 54539, 5150.0, 46790), // B46 (LAA 5 GHz)
+        Band(65536, 66435, 2110.0, 65536), // B65
+        Band(66436, 67335, 2110.0, 66436), // B66
+        Band(68586, 68935, 617.0, 68586),  // B71
     )
 
     /** Returns LTE DL centre frequency in MHz for a given EARFCN, or null if out of range. */
     fun lteDlFreqMhz(earfcn: Int): Double? {
         val b = BANDS.firstOrNull { earfcn in it.low..it.high } ?: return null
         return b.fdlLow + 0.1 * (earfcn - b.offset)
+    }
+
+    /**
+     * Returns NR DL centre frequency in MHz for a given NRARFCN per 3GPP TS 38.104.
+     * FR1 (sub-6 GHz): 0-599999 → 5 kHz grid
+     * FR1 (upper): 600000-2016666 → 15 kHz grid
+     * FR2 (mmWave): 2016667-3279165 → 60 kHz grid
+     */
+    fun nrDlFreqMhz(nrarfcn: Int): Double? = when {
+        nrarfcn in 0..599999 -> 0.005 * nrarfcn
+        nrarfcn in 600000..2016666 -> 3000.0 + 0.015 * (nrarfcn - 600000)
+        nrarfcn in 2016667..3279165 -> 24250.08 + 0.060 * (nrarfcn - 2016667)
+        else -> null
     }
 }

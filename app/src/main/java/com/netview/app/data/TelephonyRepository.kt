@@ -129,9 +129,12 @@ class TelephonyRepository(private val context: Context) {
             signalStrengths.filterIsInstance<CellSignalStrengthNr>()
                 .firstOrNull { it.ssRsrp != CellInfo.UNAVAILABLE } else null
         val hasNrSignal = nrSignal != null
+        // NSA fallback #2 (Qualcomm/non-Samsung): ServiceState.mNrFrequencyRange > 0 means NR active.
+        // 0=NONE, 1=mmWave, 2=Sub-6. This catches devices that don't expose CellInfoNr in NSA mode.
+        val hasNrFromSs = (parseNrFrequencyRange(serviceState) ?: 0) > 0
         val networkType = when {
             dataType == TelephonyManager.NETWORK_TYPE_NR -> "5G SA"
-            (hasNrCell || hasNrSignal) && dataType == TelephonyManager.NETWORK_TYPE_LTE -> "5G NSA"
+            (hasNrCell || hasNrSignal || hasNrFromSs) && dataType == TelephonyManager.NETWORK_TYPE_LTE -> "5G NSA"
             else -> Formatters.radioMode(dataType, serviceState)
         }
         // Build NR leg display: prefer full CellInfoNr if available, else synthesize from SignalStrength
@@ -196,7 +199,12 @@ class TelephonyRepository(private val context: Context) {
         val ca = when {
             cached.isNotEmpty() -> enrichCaWithSignal(cached, cellInfos)
             direct.isNotEmpty() -> enrichCaWithSignal(direct, cellInfos)
-            fromSs.isNotEmpty() -> fromSs
+            fromSs.isNotEmpty() -> {
+                // fromSs has correct per-CC bandwidths from ServiceState but null SCell band/PCI/EARFCN.
+                // Enrich SCells from allCellInfo (same-eNB non-registered LTE cells) then add signal.
+                val withCellInfo = enrichCaFromCellInfo(fromSs, cellInfos)
+                enrichCaWithSignal(withCellInfo, cellInfos)
+            }
             else -> detectCaFromCellInfo(cellInfos)
         }
 
@@ -344,6 +352,7 @@ class TelephonyRepository(private val context: Context) {
     private fun parseWcdma(c: CellInfoWcdma): ServingCellInfo {
         val id = c.cellIdentity
         val s = c.cellSignalStrength
+        val uarfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) id.uarfcn else null
         return ServingCellInfo(
             rat = "WCDMA",
             mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString else id.mcc.toString(),
@@ -353,8 +362,8 @@ class TelephonyRepository(private val context: Context) {
             cellId = id.cid.toLong().takeIf { it > 0 },
             enbId = null, gnbId = null, sectorId = null,
             earfcn = null, nrarfcn = null,
-            uarfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) id.uarfcn else null,
-            arfcn = null, band = null, bandwidthMhz = null,
+            uarfcn = uarfcn,
+            arfcn = null, band = BandMapper.wcdmaBand(uarfcn), bandwidthMhz = null,
             rsrp = null, rsrq = null, rssnr = null,
             ssSinr = null, csiRsrp = null, csiRsrq = null, csiSinr = null,
             rscp = s.dbm.takeIf { it != CellInfo.UNAVAILABLE },
@@ -367,17 +376,19 @@ class TelephonyRepository(private val context: Context) {
     private fun parseGsm(c: CellInfoGsm): ServingCellInfo {
         val id = c.cellIdentity
         val s = c.cellSignalStrength
+        val mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString else id.mcc.toString()
+        val arfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) id.arfcn else null
         return ServingCellInfo(
             rat = "GSM",
-            mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString else id.mcc.toString(),
+            mcc = mcc,
             mnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mncString else id.mnc.toString(),
             pci = null,
             tac = id.lac.takeIf { it != CellInfo.UNAVAILABLE },
             cellId = id.cid.toLong().takeIf { it > 0 },
             enbId = null, gnbId = null, sectorId = null,
             earfcn = null, nrarfcn = null, uarfcn = null,
-            arfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) id.arfcn else null,
-            band = null, bandwidthMhz = null,
+            arfcn = arfcn,
+            band = BandMapper.gsmBandWithMcc(arfcn, mcc), bandwidthMhz = null,
             rsrp = null, rsrq = null, rssnr = null,
             ssSinr = null, csiRsrp = null, csiRsrq = null, csiSinr = null,
             rscp = null, ecNo = null,
@@ -445,11 +456,12 @@ class TelephonyRepository(private val context: Context) {
     }
 
     private fun parseGsmIdentity(id: CellIdentityGsm, s: CellSignalStrengthGsm?): ServingCellInfo {
+        val mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString else id.mcc.toString()
         val arfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
             id.arfcn.takeIf { it != CellInfo.UNAVAILABLE } else null
         return ServingCellInfo(
             rat = "GSM",
-            mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString else id.mcc.toString(),
+            mcc = mcc,
             mnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mncString else id.mnc.toString(),
             pci = null,
             tac = id.lac.takeIf { it != CellInfo.UNAVAILABLE },
@@ -457,7 +469,7 @@ class TelephonyRepository(private val context: Context) {
             enbId = null, gnbId = null, sectorId = null,
             earfcn = null, nrarfcn = null, uarfcn = null,
             arfcn = arfcn,
-            band = BandMapper.gsmBand(arfcn),
+            band = BandMapper.gsmBandWithMcc(arfcn, mcc),
             bandwidthMhz = 0.2, // GSM 200 kHz
             rsrp = null, rsrq = null, rssnr = null,
             ssSinr = null, csiRsrp = null, csiRsrq = null, csiSinr = null,
@@ -535,7 +547,23 @@ class TelephonyRepository(private val context: Context) {
 
     private fun detectCaFromCellInfo(cells: List<CellInfo>): List<CarrierComponent> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return emptyList()
-        // Conservative: require multiple LTE cells, same eNB, different EARFCNs.
+
+        // Android 9+ (API 28): getCellConnectionStatus() directly identifies PCell and SCells —
+        // no CI/eNB heuristics needed, works even when SCell CI = UNAVAILABLE (common on Samsung).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val pcell = cells.filterIsInstance<CellInfoLte>()
+                .firstOrNull { it.cellConnectionStatus == CellInfo.CONNECTION_PRIMARY_SERVING }
+                ?: cells.filterIsInstance<CellInfoLte>().firstOrNull { it.isRegistered }
+                ?: return emptyList()
+            val scells = cells.filterIsInstance<CellInfoLte>()
+                .filter { it.cellConnectionStatus == CellInfo.CONNECTION_SECONDARY_SERVING }
+            if (scells.isEmpty()) return emptyList()
+            return (listOf(pcell) + scells).mapIndexed { idx, cell ->
+                cellInfoLteToCarrier(idx, if (idx == 0) "PCell" else "SCell", cell)
+            }
+        }
+
+        // Pre-API 28: conservative eNB heuristic — requires valid CI and different EARFCNs.
         val lteCells = cells.filterIsInstance<CellInfoLte>().filter {
             it.cellIdentity.ci != CellInfo.UNAVAILABLE && it.cellIdentity.ci > 0
         }
@@ -546,31 +574,33 @@ class TelephonyRepository(private val context: Context) {
         val uniqueEarfcns = sameEnb.mapNotNull {
             it.cellIdentity.earfcn.takeIf { e -> e != CellInfo.UNAVAILABLE && e > 0 }
         }.distinct()
-        if (uniqueEarfcns.size < 2) return emptyList()  // same band = sectors, not CA
+        if (uniqueEarfcns.size < 2) return emptyList()
         return sameEnb.mapIndexed { idx, cell ->
-            val id = cell.cellIdentity
-            val sig = cell.cellSignalStrength
-            val earfcn = id.earfcn.takeIf { it != CellInfo.UNAVAILABLE }
-            val bwKhz = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.bandwidth
-                        else CellInfo.UNAVAILABLE
-            val band = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && id.bands.isNotEmpty())
-                "B${id.bands.first()}" else BandMapper.lteBand(earfcn)
-            CarrierComponent(
-                index = idx,
-                role = if (cell.isRegistered && idx == 0) "PCell" else "SCell",
-                band = band,
-                bandwidthMhz = if (bwKhz > 0 && bwKhz != CellInfo.UNAVAILABLE) bwKhz / 1000.0 else null,
-                pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE },
-                earfcn = earfcn,
-                downlinkFrequencyMhz = null,
-                rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE },
-                rsrq = sig.rsrq.takeIf { it != CellInfo.UNAVAILABLE },
-                rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                    sig.rssnr.takeIf { it != CellInfo.UNAVAILABLE } else null,
-                cqi = sig.cqi.takeIf { it != CellInfo.UNAVAILABLE },
-                timingAdvance = sig.timingAdvance.takeIf { it != CellInfo.UNAVAILABLE }
-            )
+            cellInfoLteToCarrier(idx, if (cell.isRegistered && idx == 0) "PCell" else "SCell", cell)
         }
+    }
+
+    /** Build a CarrierComponent from a CellInfoLte entry (band/PCI/EARFCN/BW/signal). */
+    private fun cellInfoLteToCarrier(idx: Int, role: String, cell: CellInfoLte): CarrierComponent {
+        val id = cell.cellIdentity
+        val sig = cell.cellSignalStrength
+        val earfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            id.earfcn.takeIf { it != CellInfo.UNAVAILABLE && it > 0 } else null
+        val bwKhz = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.bandwidth else CellInfo.UNAVAILABLE
+        val band = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && id.bands.isNotEmpty())
+            "B${id.bands.first()}" else BandMapper.lteBand(earfcn)
+        return CarrierComponent(
+            index = idx, role = role, band = band,
+            bandwidthMhz = if (bwKhz > 0 && bwKhz != CellInfo.UNAVAILABLE) bwKhz / 1000.0 else null,
+            pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE },
+            earfcn = earfcn, downlinkFrequencyMhz = null,
+            rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE },
+            rsrq = sig.rsrq.takeIf { it != CellInfo.UNAVAILABLE },
+            rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                sig.rssnr.takeIf { it != CellInfo.UNAVAILABLE } else null,
+            cqi = sig.cqi.takeIf { it != CellInfo.UNAVAILABLE },
+            timingAdvance = sig.timingAdvance.takeIf { it != CellInfo.UNAVAILABLE }
+        )
     }
 
     /**
@@ -605,7 +635,9 @@ class TelephonyRepository(private val context: Context) {
         return CarrierComponent(
             index = idx,
             role = role,
-            band = "Band ${cfg.band}",
+            // cfg.band == 0 means the modem didn't populate it; leave null so enrichCaWithSignal
+            // can fill it from CellIdentityLte.getBands() via PCI matching.
+            band = if (cfg.band > 0) "B${cfg.band}" else null,
             bandwidthMhz = if (bwKhz > 0) bwKhz / 1000.0 else null,
             pci = cfg.physicalCellId.takeIf { it >= 0 },
             earfcn = cfg.downlinkChannelNumber.takeIf { it > 0 },
@@ -702,10 +734,15 @@ class TelephonyRepository(private val context: Context) {
         return cellInfos.filterIsInstance<CellInfoLte>()
             .filter { !it.isRegistered }
             .mapNotNull { c ->
+                // SCells are not registered but aren't neighbours — exclude them (API 28+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                    c.cellConnectionStatus == CellInfo.CONNECTION_SECONDARY_SERVING) return@mapNotNull null
                 val id = c.cellIdentity
                 val sig = c.cellSignalStrength
                 val pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE } ?: return@mapNotNull null
                 val rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE } ?: return@mapNotNull null
+                // Filter modem N/A markers: RSRP≤-113 is below any real signal
+                if (rsrp <= -113) return@mapNotNull null
                 val earfcn = id.earfcn.takeIf { it != CellInfo.UNAVAILABLE }
                 // On single-modem DSDS, allCellInfo is shared across both SIMs.
                 // Filter by serving EARFCN so SIM2's serving cell doesn't appear as SIM1's neighbour.
@@ -826,6 +863,16 @@ class TelephonyRepository(private val context: Context) {
                 str.contains("isUsingCarrierAggregation=true")
     }
 
+    /**
+     * Parse mNrFrequencyRange from ServiceState.toString(). Returns 0=NONE, 1=FR2, 2=FR1, or null.
+     * Present on Android 12+ and many Samsung Android 11 builds.
+     */
+    private fun parseNrFrequencyRange(ss: ServiceState?): Int? {
+        if (ss == null) return null
+        val str = try { ss.toString() } catch (e: Exception) { return null }
+        return Regex("mNrFrequencyRange=(\\d+)").find(str)?.groupValues?.get(1)?.toIntOrNull()
+    }
+
     /** True if the device is camped on a non-terrestrial (satellite) cell. */
     private fun parseNtnFromSs(ss: ServiceState?): Boolean {
         if (ss == null) return false
@@ -847,8 +894,52 @@ class TelephonyRepository(private val context: Context) {
     }
 
     /**
+     * Enrich CA components (from the ServiceState bandwidth fallback path) with band/PCI/EARFCN
+     * sourced from allCellInfo. On API 28+ uses CONNECTION_SECONDARY_SERVING to find SCells
+     * directly — no CI/eNB heuristic needed, works even when SCell CI = UNAVAILABLE.
+     */
+    private fun enrichCaFromCellInfo(
+        ca: List<CarrierComponent>,
+        cellInfos: List<CellInfo>
+    ): List<CarrierComponent> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return ca
+
+        val scellCandidates = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            cellInfos.filterIsInstance<CellInfoLte>()
+                .filter { it.cellConnectionStatus == CellInfo.CONNECTION_SECONDARY_SERVING }
+                .sortedByDescending { it.cellIdentity.earfcn }
+        } else {
+            val pcellCi = cellInfos.filterIsInstance<CellInfoLte>()
+                .firstOrNull { it.isRegistered }?.cellIdentity?.ci ?: return ca
+            val pcellEnb = pcellCi / 256L
+            cellInfos.filterIsInstance<CellInfoLte>()
+                .filter { !it.isRegistered && it.cellIdentity.ci / 256L == pcellEnb }
+                .sortedByDescending { it.cellIdentity.earfcn }
+        }
+
+        var idx = 0
+        return ca.map { cc ->
+            if (cc.band != null || cc.role == "PCell") return@map cc
+            val candidate = scellCandidates.getOrNull(idx++) ?: return@map cc
+            val id = candidate.cellIdentity
+            val earfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                id.earfcn.takeIf { it != CellInfo.UNAVAILABLE && it > 0 } else null
+            val bwKhz = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.bandwidth else CellInfo.UNAVAILABLE
+            val band = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && id.bands.isNotEmpty())
+                "B${id.bands.first()}" else BandMapper.lteBand(earfcn)
+            cc.copy(
+                band = band,
+                pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE },
+                earfcn = earfcn,
+                bandwidthMhz = cc.bandwidthMhz ?: if (bwKhz > 0 && bwKhz != CellInfo.UNAVAILABLE) bwKhz / 1000.0 else null
+            )
+        }
+    }
+
+    /**
      * Enrich CA components from PCC callback / reflection path with signal from allCellInfo,
-     * matched by PCI. CellInfo entries report per-CC signal on some Samsung builds.
+     * matched by PCI. Also fills band/EARFCN from id.bands when PCC reported null or band=0
+     * (some modems don't populate PhysicalChannelConfig.band).
      */
     private fun enrichCaWithSignal(ca: List<CarrierComponent>, cellInfos: List<CellInfo>): List<CarrierComponent> {
         if (ca.isEmpty()) return ca
@@ -858,7 +949,15 @@ class TelephonyRepository(private val context: Context) {
         return ca.map { cc ->
             val cell = cc.pci?.let { lteByPci[it] } ?: return@map cc
             val sig = cell.cellSignalStrength
+            val id = cell.cellIdentity
+            val earfcnFromCi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                id.earfcn.takeIf { it != CellInfo.UNAVAILABLE && it > 0 } else null
+            val bandFromCi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && id.bands.isNotEmpty())
+                "B${id.bands.first()}"
+            else BandMapper.lteBand(earfcnFromCi)
             cc.copy(
+                band = if (cc.band == null || cc.band == "B0") bandFromCi else cc.band,
+                earfcn = cc.earfcn ?: earfcnFromCi,
                 rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE },
                 rsrq = sig.rsrq.takeIf { it != CellInfo.UNAVAILABLE },
                 rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)

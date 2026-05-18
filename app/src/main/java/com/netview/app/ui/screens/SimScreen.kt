@@ -128,7 +128,7 @@ fun SimScreen(
                     rows += "NCI" to Formatters.longOrDash(c.cellId)
                     rows += "PCI" to Formatters.intOrDash(c.pci)
                     rows += "TAC" to Formatters.intOrDash(c.tac)
-                    rows += "NRARFCN" to Formatters.intOrDash(c.nrarfcn)
+                    rows += "NRARFCN" to nrArfcnWithFreq(c.nrarfcn)
                     rows += "Band" to Formatters.stringOrDash(c.band)
                 }
                 "WCDMA" -> {
@@ -245,7 +245,11 @@ fun SimScreen(
                 }
                 if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
             }
-            InfoCard(title = "Carrier Aggregation", rows = rows)
+            InfoCard(
+                title = "Carrier Aggregation • ${sim.carrierAggregation.size}CC",
+                rows = rows,
+                collapsible = true
+            )
         } else if (ratIsLteOrNr) {
             InfoCard(
                 title = "Carrier Aggregation",
@@ -332,11 +336,29 @@ fun SimScreen(
             )
         }
 
-        // Neighbour Cells — collapsible, default collapsed, shown at the bottom
+        // Location
+        location?.let { loc ->
+            InfoCard(
+                title = "Location",
+                rows = listOf(
+                    "Latitude" to "%.6f".format(loc.latitude),
+                    "Longitude" to "%.6f".format(loc.longitude),
+                    "Accuracy" to "± %.1f m".format(loc.accuracyMeters),
+                    "Altitude" to (loc.altitudeMeters?.let { "%.1f m".format(it) } ?: "—"),
+                    "Speed" to (loc.speedMps?.let { "%.1f m/s".format(it) } ?: "—"),
+                    "Provider" to loc.provider
+                )
+            )
+        } ?: InfoCard(
+            title = "Location",
+            rows = listOf("Status" to "Acquiring GPS fix…")
+        )
+
+        // Neighbour Cells — collapsible, default collapsed, absolute bottom
         if (sim.neighborCells.isNotEmpty()) {
             val rows = mutableListOf<Pair<String, String>>()
             sim.neighborCells.forEach { n ->
-                rows += "PCI ${n.pci ?: "—"}" to "${n.band ?: "—"} • EARFCN ${earfcnWithFreq(n.earfcn)}"
+                rows += "PCI ${n.pci ?: "—"}" to "${n.band ?: "—"} • EARFCN ${n.earfcn?.toString() ?: "—"}"
                 val sigParts = buildList {
                     n.rsrp?.let { add("RSRP $it dBm") }
                     n.rsrq?.let { add("RSRQ $it dB") }
@@ -361,24 +383,6 @@ fun SimScreen(
             )
         }
 
-        // Location
-        location?.let { loc ->
-            InfoCard(
-                title = "Location",
-                rows = listOf(
-                    "Latitude" to "%.6f".format(loc.latitude),
-                    "Longitude" to "%.6f".format(loc.longitude),
-                    "Accuracy" to "± %.1f m".format(loc.accuracyMeters),
-                    "Altitude" to (loc.altitudeMeters?.let { "%.1f m".format(it) } ?: "—"),
-                    "Speed" to (loc.speedMps?.let { "%.1f m/s".format(it) } ?: "—"),
-                    "Provider" to loc.provider
-                )
-            )
-        } ?: InfoCard(
-            title = "Location",
-            rows = listOf("Status" to "Acquiring GPS fix…")
-        )
-
         Spacer(Modifier.height(24.dp))
         } // end scrollable Column
     } // end outer Column
@@ -388,6 +392,12 @@ private fun earfcnWithFreq(earfcn: Int?): String {
     if (earfcn == null) return "—"
     val freq = EarfcnUtils.lteDlFreqMhz(earfcn)?.let { " (%.1f MHz)".format(it) } ?: ""
     return "$earfcn$freq"
+}
+
+private fun nrArfcnWithFreq(nrarfcn: Int?): String {
+    if (nrarfcn == null) return "—"
+    val freq = EarfcnUtils.nrDlFreqMhz(nrarfcn)?.let { " (%.0f MHz)".format(it) } ?: ""
+    return "$nrarfcn$freq"
 }
 
 private fun formatMbps(mbps: Double): String {
