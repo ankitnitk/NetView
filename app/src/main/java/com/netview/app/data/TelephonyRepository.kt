@@ -173,6 +173,12 @@ class TelephonyRepository(private val context: Context) {
             caCache.remove(sub.subscriptionId)
         }
 
+        // On DSDS, data is active on exactly one SIM at a time. CA can only occur on
+        // the data SIM — assigning CA to the non-data SIM is always wrong.
+        val defaultDataSubId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            SubscriptionManager.getDefaultDataSubscriptionId() else sub.subscriptionId
+        val isDataSim = defaultDataSubId == sub.subscriptionId
+
         // Parse all per-CC bandwidths from ServiceState.mCellBandwidths — used for both
         // serving-cell BW fallback AND CA detection. First entry is the PCell.
         val ssBws = parseCellBandwidthsFromSs(serviceState)
@@ -188,24 +194,29 @@ class TelephonyRepository(private val context: Context) {
             )
         } else serving
 
-        // CA: layered fallback. Callback cache → synchronous reflection → ServiceState
-        // mCellBandwidths string parse (proven to work on Samsung) → cell info heuristic.
-        val cached = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            caCache[sub.subscriptionId] ?: emptyList() else emptyList()
-        val direct = if (cached.isEmpty()) parsePhysicalChannelsViaReflection(tm) else emptyList()
-        val caActiveFromSs = parseCaActiveFromSs(serviceState)
-        val fromSs = if (cached.isEmpty() && direct.isEmpty())
-            buildCaFromBandwidths(ssBws, servingEnriched, caActiveFromSs) else emptyList()
-        val ca = when {
-            cached.isNotEmpty() -> enrichCaWithSignal(cached, cellInfos)
-            direct.isNotEmpty() -> enrichCaWithSignal(direct, cellInfos)
-            fromSs.isNotEmpty() -> {
-                // fromSs has correct per-CC bandwidths from ServiceState but null SCell band/PCI/EARFCN.
-                // Enrich SCells from allCellInfo (same-eNB non-registered LTE cells) then add signal.
-                val withCellInfo = enrichCaFromCellInfo(fromSs, cellInfos)
-                enrichCaWithSignal(withCellInfo, cellInfos)
+        // CA: only computed for the active data SIM. On DSDS the other SIM gets emptyList()
+        // so allCellInfo bleed from the shared modem never contaminates the non-data SIM.
+        val ca = if (!isDataSim) {
+            caCache.remove(sub.subscriptionId)
+            emptyList()
+        } else {
+            // Layered fallback: callback cache → synchronous reflection → ServiceState
+            // mCellBandwidths string parse (proven to work on Samsung) → cell info heuristic.
+            val cached = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                caCache[sub.subscriptionId] ?: emptyList() else emptyList()
+            val direct = if (cached.isEmpty()) parsePhysicalChannelsViaReflection(tm) else emptyList()
+            val caActiveFromSs = parseCaActiveFromSs(serviceState)
+            val fromSs = if (cached.isEmpty() && direct.isEmpty())
+                buildCaFromBandwidths(ssBws, servingEnriched, caActiveFromSs) else emptyList()
+            when {
+                cached.isNotEmpty() -> enrichCaWithSignal(cached, cellInfos)
+                direct.isNotEmpty() -> enrichCaWithSignal(direct, cellInfos)
+                fromSs.isNotEmpty() -> {
+                    val withCellInfo = enrichCaFromCellInfo(fromSs, cellInfos)
+                    enrichCaWithSignal(withCellInfo, cellInfos)
+                }
+                else -> detectCaFromCellInfo(cellInfos)
             }
-            else -> detectCaFromCellInfo(cellInfos)
         }
 
         // Serving network PLMN — use ServiceState.operatorNumeric, not home SIM (critical for roaming)
