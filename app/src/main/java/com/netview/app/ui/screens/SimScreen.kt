@@ -354,42 +354,20 @@ fun SimScreen(
             rows = listOf("Status" to "Acquiring GPS fix…")
         )
 
-        // Neighbour Cells — collapsible, default collapsed, absolute bottom
+        // Same-RAT neighbours — intra-frequency, top 5, collapsed by default
         if (sim.neighborCells.isNotEmpty()) {
-            val rows = mutableListOf<Pair<String, String>>()
-            sim.neighborCells.forEach { n ->
-                when (n.rat) {
-                    "WCDMA" -> {
-                        rows += "WCDMA  PSC ${n.psc ?: "—"}" to "${n.band ?: "—"} • UARFCN ${n.uarfcn?.toString() ?: "—"}"
-                        val sigParts = buildList {
-                            n.rscp?.let { add("RSCP $it dBm") }
-                            n.ecNo?.let { add("Ec/No $it dB") }
-                        }
-                        if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
-                    }
-                    else -> {
-                        rows += "LTE  PCI ${n.pci ?: "—"}" to "${n.band ?: "—"} • EARFCN ${n.earfcn?.toString() ?: "—"}"
-                        val sigParts = buildList {
-                            n.rsrp?.let { add("RSRP $it dBm") }
-                            n.rsrq?.let { add("RSRQ $it dB") }
-                        }
-                        if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
-                        if (n.pci != null && n.earfcn != null && cmNeighborLookup != null) {
-                            cmNeighborLookup(n.pci, n.earfcn)?.let { cm ->
-                                val cmParts = buildList {
-                                    cm.rsPowerDbm?.let { add("RS Power $it dBm") }
-                                    cm.tiltTenthDeg?.let { add("Tilt ${"%.1f".format(it / 10.0)}°") }
-                                    cm.dlRsBoost?.let { add("RS Boost $it dB") }
-                                }
-                                if (cmParts.isNotEmpty()) rows += "  Config" to cmParts.joinToString("  ")
-                            }
-                        }
-                    }
-                }
-            }
             InfoCard(
                 title = "Neighbour Cells (${sim.neighborCells.size})",
-                rows = rows,
+                rows = neighbourRows(sim.neighborCells, cmNeighborLookup),
+                collapsible = true,
+                initiallyExpanded = false
+            )
+        }
+        // Inter-RAT neighbours — different technology, top 5, collapsed by default
+        if (sim.interRatNeighborCells.isNotEmpty()) {
+            InfoCard(
+                title = "Inter-RAT Cells (${sim.interRatNeighborCells.size})",
+                rows = neighbourRows(sim.interRatNeighborCells, null),
                 collapsible = true,
                 initiallyExpanded = false
             )
@@ -420,4 +398,42 @@ private fun formatDuration(seconds: Long): String = when {
     seconds < 60 -> "${seconds}s"
     seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
     else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
+}
+
+private fun neighbourRows(
+    cells: List<com.netview.app.data.NeighborCell>,
+    cmNeighborLookup: ((Int, Int) -> com.netview.app.data.CmExportCell?)?
+): List<Pair<String, String>> {
+    val rows = mutableListOf<Pair<String, String>>()
+    cells.forEach { n ->
+        when (n.rat) {
+            "WCDMA" -> {
+                rows += "WCDMA  PSC ${n.psc ?: "—"}" to "${n.band ?: "—"} • UARFCN ${n.uarfcn?.toString() ?: "—"}"
+                val sig = buildList {
+                    n.rscp?.let { add("RSCP $it dBm") }
+                    n.ecNo?.let { add("Ec/No $it dB") }
+                }
+                if (sig.isNotEmpty()) rows += "  Signal" to sig.joinToString("  ")
+            }
+            else -> {
+                rows += "LTE  PCI ${n.pci ?: "—"}" to "${n.band ?: "—"} • EARFCN ${n.earfcn?.toString() ?: "—"}"
+                val sig = buildList {
+                    n.rsrp?.let { add("RSRP $it dBm") }
+                    n.rsrq?.let { add("RSRQ $it dB") }
+                }
+                if (sig.isNotEmpty()) rows += "  Signal" to sig.joinToString("  ")
+                if (n.pci != null && n.earfcn != null && cmNeighborLookup != null) {
+                    cmNeighborLookup(n.pci, n.earfcn)?.let { cm ->
+                        val cfg = buildList {
+                            cm.rsPowerDbm?.let { add("RS Power $it dBm") }
+                            cm.tiltTenthDeg?.let { add("Tilt ${"%.1f".format(it / 10.0)}°") }
+                            cm.dlRsBoost?.let { add("RS Boost $it dB") }
+                        }
+                        if (cfg.isNotEmpty()) rows += "  Config" to cfg.joinToString("  ")
+                    }
+                }
+            }
+        }
+    }
+    return rows
 }

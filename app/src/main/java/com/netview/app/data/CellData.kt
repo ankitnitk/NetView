@@ -20,6 +20,7 @@ data class SimSlotData(
     val isNonTerrestrial: Boolean = false, // true when device is on a satellite (NTN) cell
     val diagnostics: DiagnosticInfo = DiagnosticInfo(),
     val neighborCells: List<NeighborCell> = emptyList(),
+    val interRatNeighborCells: List<NeighborCell> = emptyList(),
     val dlThroughputMbps: Double? = null,
     val ulThroughputMbps: Double? = null,
     val timeOnCellSeconds: Long? = null,
