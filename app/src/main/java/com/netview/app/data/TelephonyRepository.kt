@@ -791,13 +791,10 @@ class TelephonyRepository(private val context: Context) {
     /** True if the modem reports carrier aggregation is currently active. */
     private fun parseCaActiveFromSs(ss: ServiceState?): Boolean {
         if (ss == null) return false
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            try { ss.isUsingCarrierAggregation } catch (e: Throwable) {
-                // Fall back to string parse on builds where the method is restricted
-                ss.toString().contains("mIsUsingCarrierAggregation=true") ||
-                        ss.toString().contains("isUsingCarrierAggregation=true")
-            }
-        } else false
+        // isUsingCarrierAggregation() is @hide — string-parse the toString() dump instead.
+        val str = try { ss.toString() } catch (e: Exception) { return false }
+        return str.contains("mIsUsingCarrierAggregation=true") ||
+                str.contains("isUsingCarrierAggregation=true")
     }
 
     /** True if the device is camped on a non-terrestrial (satellite) cell. */
