@@ -49,14 +49,13 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk "out/NetView-${{ steps.ver.outputs.name }}.apk"
-          cp app/build/outputs/apk/release/app-release.apk out/NetView-latest.apk
+          cp app/build/outputs/apk/release/app-release.apk "out/NetView-v${{ steps.ver.outputs.name }}.apk"
 
-      - name: Upload APK artifact (also keeps a CI download for 30 days)
+      - name: Upload APK artifact (keeps a CI download for 30 days)
         uses: actions/upload-artifact@v4
         with:
           name: NetView-APK
-          path: out/NetView-*.apk
+          path: "out/NetView-v${{ steps.ver.outputs.name }}.apk"
           retention-days: 30
 
       - name: Publish/refresh "Latest" GitHub Release with APK
@@ -64,15 +63,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: NetView ${{ steps.ver.outputs.name }} (latest)
+          name: NetView v${{ steps.ver.outputs.name }}
           body: |
             Automatic build from `main` branch.
             Commit: ${{ github.sha }}
 
-            Download `NetView-latest.apk` below and install on your phone (allow Unknown Sources).
-          files: |
-            out/NetView-${{ steps.ver.outputs.name }}.apk
-            out/NetView-latest.apk
+            Download `NetView-v${{ steps.ver.outputs.name }}.apk` below and install on your phone (allow Unknown Sources).
+          files: "out/NetView-v${{ steps.ver.outputs.name }}.apk"
           prerelease: false
           make_latest: "true"
         env:
