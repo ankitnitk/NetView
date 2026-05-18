@@ -27,12 +27,16 @@ data class SimSlotData(
 
 data class NeighborCell(
     val rat: String,
-    val pci: Int?,
-    val earfcn: Int?,
+    val pci: Int?,              // LTE Physical Cell ID
+    val psc: Int? = null,       // WCDMA Primary Scrambling Code
+    val earfcn: Int?,           // LTE
+    val uarfcn: Int? = null,    // WCDMA
     val band: String?,
-    val rsrp: Int?,
-    val rsrq: Int?,
-    val rssnr: Int?,
+    val rsrp: Int?,             // LTE
+    val rsrq: Int?,             // LTE
+    val rssnr: Int?,            // LTE
+    val rscp: Int? = null,      // WCDMA RSCP (dBm)
+    val ecNo: Int? = null,      // WCDMA Ec/No (dB)
 )
 
 /** Diagnostic counters surfaced in the UI so we can see what Samsung is actually giving us. */

@@ -358,20 +358,32 @@ fun SimScreen(
         if (sim.neighborCells.isNotEmpty()) {
             val rows = mutableListOf<Pair<String, String>>()
             sim.neighborCells.forEach { n ->
-                rows += "PCI ${n.pci ?: "—"}" to "${n.band ?: "—"} • EARFCN ${n.earfcn?.toString() ?: "—"}"
-                val sigParts = buildList {
-                    n.rsrp?.let { add("RSRP $it dBm") }
-                    n.rsrq?.let { add("RSRQ $it dB") }
-                }
-                if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
-                if (n.pci != null && n.earfcn != null && cmNeighborLookup != null) {
-                    cmNeighborLookup(n.pci, n.earfcn)?.let { cm ->
-                        val cmParts = buildList {
-                            cm.rsPowerDbm?.let { add("RS Power $it dBm") }
-                            cm.tiltTenthDeg?.let { add("Tilt ${"%.1f".format(it / 10.0)}°") }
-                            cm.dlRsBoost?.let { add("RS Boost $it dB") }
+                when (n.rat) {
+                    "WCDMA" -> {
+                        rows += "WCDMA  PSC ${n.psc ?: "—"}" to "${n.band ?: "—"} • UARFCN ${n.uarfcn?.toString() ?: "—"}"
+                        val sigParts = buildList {
+                            n.rscp?.let { add("RSCP $it dBm") }
+                            n.ecNo?.let { add("Ec/No $it dB") }
                         }
-                        if (cmParts.isNotEmpty()) rows += "  Config" to cmParts.joinToString("  ")
+                        if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
+                    }
+                    else -> {
+                        rows += "LTE  PCI ${n.pci ?: "—"}" to "${n.band ?: "—"} • EARFCN ${n.earfcn?.toString() ?: "—"}"
+                        val sigParts = buildList {
+                            n.rsrp?.let { add("RSRP $it dBm") }
+                            n.rsrq?.let { add("RSRQ $it dB") }
+                        }
+                        if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
+                        if (n.pci != null && n.earfcn != null && cmNeighborLookup != null) {
+                            cmNeighborLookup(n.pci, n.earfcn)?.let { cm ->
+                                val cmParts = buildList {
+                                    cm.rsPowerDbm?.let { add("RS Power $it dBm") }
+                                    cm.tiltTenthDeg?.let { add("Tilt ${"%.1f".format(it / 10.0)}°") }
+                                    cm.dlRsBoost?.let { add("RS Boost $it dB") }
+                                }
+                                if (cmParts.isNotEmpty()) rows += "  Config" to cmParts.joinToString("  ")
+                            }
+                        }
                     }
                 }
             }

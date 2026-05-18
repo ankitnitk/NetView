@@ -248,7 +248,7 @@ class TelephonyRepository(private val context: Context) {
             carrierAggregation = ca,
             isNonTerrestrial = isNtn,
             diagnostics = diagnostics,
-            neighborCells = parseNeighborCells(cellInfos, servingEnriched?.earfcn),
+            neighborCells = parseNeighborCells(cellInfos, servingEnriched?.mcc, servingEnriched?.mnc),
         )
     }
 
@@ -746,28 +746,37 @@ class TelephonyRepository(private val context: Context) {
         }
     }
 
-    private fun parseNeighborCells(cellInfos: List<CellInfo>, servingEarfcn: Int?): List<NeighborCell> {
+    private fun parseNeighborCells(
+        cellInfos: List<CellInfo>,
+        servingMcc: String?,
+        servingMnc: String?
+    ): List<NeighborCell> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return emptyList()
-        return cellInfos.filterIsInstance<CellInfoLte>()
+
+        // Returns true if the cell belongs to a confirmed different operator.
+        // Unknown MCC/MNC (null/empty) → include; serving MCC/MNC unknown → include all.
+        fun mccMncMismatch(cellMcc: String?, cellMnc: String?): Boolean {
+            if (cellMcc.isNullOrEmpty() || cellMnc.isNullOrEmpty()) return false
+            if (servingMcc.isNullOrEmpty() || servingMnc.isNullOrEmpty()) return false
+            return cellMcc != servingMcc || cellMnc != servingMnc
+        }
+
+        val lteNeighbours = cellInfos.filterIsInstance<CellInfoLte>()
             .filter { !it.isRegistered }
             .mapNotNull { c ->
-                // SCells are not registered but aren't neighbours — exclude them (API 28+)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
                     c.cellConnectionStatus == CellInfo.CONNECTION_SECONDARY_SERVING) return@mapNotNull null
                 val id = c.cellIdentity
                 val sig = c.cellSignalStrength
                 val pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE } ?: return@mapNotNull null
                 val rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE } ?: return@mapNotNull null
-                // Filter modem N/A markers: RSRP≤-113 is below any real signal
                 if (rsrp <= -113) return@mapNotNull null
+                val cellMcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString?.takeIf { it.isNotEmpty() } else null
+                val cellMnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mncString?.takeIf { it.isNotEmpty() } else null
+                if (mccMncMismatch(cellMcc, cellMnc)) return@mapNotNull null
                 val earfcn = id.earfcn.takeIf { it != CellInfo.UNAVAILABLE }
-                // On single-modem DSDS, allCellInfo is shared across both SIMs.
-                // Filter by serving EARFCN so SIM2's serving cell doesn't appear as SIM1's neighbour.
-                if (servingEarfcn != null && earfcn != null && earfcn != servingEarfcn) return@mapNotNull null
                 NeighborCell(
-                    rat = "LTE",
-                    pci = pci,
-                    earfcn = earfcn,
+                    rat = "LTE", pci = pci, earfcn = earfcn,
                     band = BandMapper.lteBand(earfcn),
                     rsrp = rsrp,
                     rsrq = sig.rsrq.takeIf { it != CellInfo.UNAVAILABLE },
@@ -775,7 +784,32 @@ class TelephonyRepository(private val context: Context) {
                         sig.rssnr.takeIf { it != CellInfo.UNAVAILABLE } else null,
                 )
             }
-            .sortedByDescending { it.rsrp }
+
+        val wcdmaNeighbours = cellInfos.filterIsInstance<CellInfoWcdma>()
+            .filter { !it.isRegistered }
+            .mapNotNull { c ->
+                val id = c.cellIdentity
+                val sig = c.cellSignalStrength
+                val psc = id.psc.takeIf { it != CellInfo.UNAVAILABLE } ?: return@mapNotNull null
+                val cellMcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mccString?.takeIf { it.isNotEmpty() } else null
+                val cellMnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) id.mncString?.takeIf { it.isNotEmpty() } else null
+                if (mccMncMismatch(cellMcc, cellMnc)) return@mapNotNull null
+                val uarfcn = id.uarfcn.takeIf { it != CellInfo.UNAVAILABLE && it > 0 }
+                val rscp = sig.dbm.takeIf { it != CellInfo.UNAVAILABLE }
+                val ecNo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                    try { sig.ecNo.takeIf { it != CellInfo.UNAVAILABLE } } catch (e: Throwable) { null }
+                else null
+                NeighborCell(
+                    rat = "WCDMA", pci = null, psc = psc,
+                    earfcn = null, uarfcn = uarfcn,
+                    band = BandMapper.wcdmaBand(uarfcn),
+                    rsrp = null, rsrq = null, rssnr = null,
+                    rscp = rscp, ecNo = ecNo,
+                )
+            }
+
+        return (lteNeighbours + wcdmaNeighbours)
+            .sortedByDescending { it.rsrp ?: it.rscp ?: Int.MIN_VALUE }
             .take(10)
     }
 
