@@ -1,5 +1,8 @@
 package com.netview.app.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +19,9 @@ fun SettingsScreen(
     debugLoggingEnabled: Boolean,
     onDebugLoggingChange: (Boolean) -> Unit,
     onOpenDebugLog: () -> Unit,
+    cmExportStatus: String,
+    onLoadCmExport: (Uri) -> Unit,
+    onClearCmExport: () -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -83,6 +89,41 @@ fun SettingsScreen(
                     if (debugLoggingEnabled) {
                         Spacer(Modifier.height(12.dp))
                         Button(onClick = onOpenDebugLog) { Text("View Debug Log") }
+                    }
+                }
+            }
+
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    val fileLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.OpenDocument()
+                    ) { uri -> uri?.let { onLoadCmExport(it) } }
+
+                    Text("CMExport File", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Nokia 4G CMExport Excel file for site/cell parameter lookup",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        cmExportStatus,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (cmExportStatus.startsWith("Loaded"))
+                            MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { fileLauncher.launch(arrayOf("*/*")) }) {
+                            Text("Load File")
+                        }
+                        if (cmExportStatus.startsWith("Loaded")) {
+                            OutlinedButton(onClick = onClearCmExport) {
+                                Text("Clear")
+                            }
+                        }
                     }
                 }
             }

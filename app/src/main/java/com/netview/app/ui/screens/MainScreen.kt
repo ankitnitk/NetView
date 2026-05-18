@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.netview.app.data.CmExportCell
 import com.netview.app.data.LocationData
 import com.netview.app.data.SimSlotData
 import kotlinx.coroutines.launch
@@ -21,7 +22,8 @@ fun MainScreen(
     location: LocationData?,
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    cmExportLookup: ((Int, Int) -> CmExportCell?)? = null
 ) {
     Scaffold(
         topBar = {
@@ -65,7 +67,13 @@ fun MainScreen(
             }
 
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                SimScreen(sim = sims[page], location = location)
+                val sim = sims[page]
+                val cmCell = sim.servingCell?.let { cell ->
+                    val pci = cell.pci ?: return@let null
+                    val earfcn = cell.earfcn ?: return@let null
+                    cmExportLookup?.invoke(pci, earfcn)
+                }
+                SimScreen(sim = sim, location = location, cmExportCell = cmCell)
             }
         }
     }

@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.netview.app.data.CmExportCell
 import com.netview.app.data.LocationData
 import com.netview.app.data.SimSlotData
 import com.netview.app.ui.components.InfoCard
@@ -27,6 +28,7 @@ import com.netview.app.utils.ShareFormatter
 fun SimScreen(
     sim: SimSlotData,
     location: LocationData?,
+    cmExportCell: CmExportCell? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -229,6 +231,21 @@ fun SimScreen(
             )
         }
         // No CA card at all when on 2G/3G — concept doesn't apply.
+
+        // Network Parameters (CMExport match)
+        cmExportCell?.let { m ->
+            InfoCard(
+                title = "Network Parameters",
+                rows = listOf(
+                    "Site" to m.lnbtsName,
+                    "Cell" to m.lncelName,
+                    "Tilt" to (m.tiltTenthDeg?.let { "%.1f°".format(it / 10.0) } ?: "—"),
+                    "RS Boost" to (m.dlRsBoost?.let { "${it} dB" } ?: "—"),
+                    "PMAX" to (m.pmaxDbm?.let { "${it} dBm" } ?: "—"),
+                    "MIMO Mode" to (m.dlMimoMode ?: "—")
+                )
+            )
+        }
 
         // Location
         location?.let { loc ->

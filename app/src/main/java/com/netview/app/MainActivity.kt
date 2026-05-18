@@ -81,6 +81,7 @@ class MainActivity : ComponentActivity() {
         val permissionsGranted by viewModel.permissionsGranted.collectAsState()
         val refresh by viewModel.refreshSecondsFlow.collectAsState(initial = SettingsRepository.DEFAULT_REFRESH)
         val debugLogging by viewModel.debugLoggingEnabledFlow.collectAsState(initial = false)
+        val cmExportStatus by viewModel.cmExportStatus.collectAsState()
 
         NavHost(navController = nav, startDestination = "main") {
             composable("main") {
@@ -96,7 +97,8 @@ class MainActivity : ComponentActivity() {
                             )
                         )
                     },
-                    onOpenSettings = { nav.navigate("settings") }
+                    onOpenSettings = { nav.navigate("settings") },
+                    cmExportLookup = { pci, earfcn -> viewModel.lookupCmExport(pci, earfcn) }
                 )
             }
             composable("settings") {
@@ -106,6 +108,9 @@ class MainActivity : ComponentActivity() {
                     debugLoggingEnabled = debugLogging,
                     onDebugLoggingChange = { viewModel.setDebugLoggingEnabled(it) },
                     onOpenDebugLog = { nav.navigate("debug_log") },
+                    cmExportStatus = cmExportStatus,
+                    onLoadCmExport = { uri -> viewModel.loadCmExport(uri) },
+                    onClearCmExport = { viewModel.clearCmExport() },
                     onBack = { nav.popBackStack() }
                 )
             }
