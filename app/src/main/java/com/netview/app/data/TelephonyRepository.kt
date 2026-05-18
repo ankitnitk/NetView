@@ -91,7 +91,16 @@ class TelephonyRepository(private val context: Context) {
         // allCellInfo is tied to the active modem, not the SIM — both subs return the same list
         // on a single-modem device. Prefer per-SIM ServiceState.NetworkRegistrationInfo cellIdentity;
         // fall back to allCellInfo only when the SS path yields nothing.
-        val serving = parseServingFromServiceState(tm, serviceState) ?: parseServingCell(cellInfos)
+        val serving0 = parseServingFromServiceState(tm, serviceState) ?: parseServingCell(cellInfos)
+        // TA from SignalStrength.cellSignalStrengths is unreliable on Samsung — the modem only
+        // populates it in the CellInfoLte path. Patch it in when the SS path leaves it null.
+        val serving = if (serving0?.rat == "LTE" && serving0.timingAdvance == null) {
+            val ta = cellInfos.filterIsInstance<CellInfoLte>()
+                .firstOrNull { it.isRegistered }
+                ?.cellSignalStrength?.timingAdvance
+                ?.takeIf { it != CellInfo.UNAVAILABLE }
+            ta?.let { serving0.copy(timingAdvance = it) } ?: serving0
+        } else serving0
         val ssObj = try { tm.signalStrength } catch (e: Exception) { null }
         val signalStrengths = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
@@ -181,8 +190,9 @@ class TelephonyRepository(private val context: Context) {
         val cached = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             caCache[sub.subscriptionId] ?: emptyList() else emptyList()
         val direct = if (cached.isEmpty()) parsePhysicalChannelsViaReflection(tm) else emptyList()
+        val caActiveFromSs = parseCaActiveFromSs(serviceState)
         val fromSs = if (cached.isEmpty() && direct.isEmpty())
-            buildCaFromBandwidths(ssBws, servingEnriched, cellInfos) else emptyList()
+            buildCaFromBandwidths(ssBws, servingEnriched, caActiveFromSs) else emptyList()
         val ca = when {
             cached.isNotEmpty() -> enrichCaWithSignal(cached, cellInfos)
             direct.isNotEmpty() -> enrichCaWithSignal(direct, cellInfos)
@@ -742,28 +752,20 @@ class TelephonyRepository(private val context: Context) {
     }
 
     /**
-     * Build CarrierComponent list from per-CC bandwidth array. The Samsung public API
-     * doesn't expose per-SCell band/PCI/EARFCN, so SCell rows show only bandwidth.
-     * Showing guessed bands from neighbor history led to incorrect labels when the
-     * serving cell handed over — better to show nothing than wrong info.
+     * Build CarrierComponent list from per-CC bandwidth array (ServiceState fallback).
+     * Only used when PhysicalChannelConfig isn't available. We know the CA flag and per-CC
+     * bandwidths from ServiceState reliably. We do NOT try to match SCells from allCellInfo
+     * because that list contains neighbor cells too — there's no isServing flag on non-registered
+     * cells, so any match would be a guess and would frequently pick the wrong cell.
      */
     private fun buildCaFromBandwidths(
         bws: List<Int>,
         serving: ServingCellInfo?,
-        cellInfos: List<CellInfo>
+        isCaActive: Boolean
     ): List<CarrierComponent> {
-        if (bws.size < 2) return emptyList()
-        // Non-registered LTE cells on a different EARFCN than the PCell are SCell candidates.
-        val scellCandidates: MutableList<CellInfoLte> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            cellInfos.filterIsInstance<CellInfoLte>()
-                .filter { !it.isRegistered }
-                .filter {
-                    val e = it.cellIdentity.earfcn
-                    e != CellInfo.UNAVAILABLE && e > 0 && e != (serving?.earfcn ?: -1)
-                }
-                .toMutableList()
-        } else mutableListOf()
-
+        // If the modem reports CA is not active, don't show a CA card — mCellBandwidths can
+        // reflect configured CA capability even when only one CC is in use.
+        if (!isCaActive || bws.size < 2) return emptyList()
         return bws.mapIndexed { idx, bwKhz ->
             if (idx == 0) {
                 CarrierComponent(
@@ -775,36 +777,27 @@ class TelephonyRepository(private val context: Context) {
                     cqi = serving?.cqi, timingAdvance = serving?.timingAdvance
                 )
             } else {
-                // Match by bandwidth first (avoids wrong assignment when SCells differ in BW);
-                // fall back to next available candidate when BW is identical across SCells.
-                val byBw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
-                    scellCandidates.firstOrNull { it.cellIdentity.bandwidth == bwKhz } else null
-                val candidate = byBw ?: scellCandidates.firstOrNull()
-                if (candidate != null) scellCandidates.remove(candidate)
-
-                val earfcn = candidate?.let {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
-                        it.cellIdentity.earfcn.takeIf { e -> e != CellInfo.UNAVAILABLE } else null
-                }
-                val pci = candidate?.cellIdentity?.pci?.takeIf { it != CellInfo.UNAVAILABLE }
-                val sig = candidate?.cellSignalStrength
-                val band = candidate?.let {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && it.cellIdentity.bands.isNotEmpty())
-                        "B${it.cellIdentity.bands.first()}" else BandMapper.lteBand(earfcn)
-                }
+                // SCell: bandwidth is from ServiceState (reliable). Band/PCI/signal are not
+                // available without PhysicalChannelConfig — leave them null rather than guess.
                 CarrierComponent(
                     index = idx, role = "SCell",
-                    band = band, bandwidthMhz = bwKhz / 1000.0,
-                    pci = pci, earfcn = earfcn, downlinkFrequencyMhz = null,
-                    rsrp = sig?.rsrp?.takeIf { it != CellInfo.UNAVAILABLE },
-                    rsrq = sig?.rsrq?.takeIf { it != CellInfo.UNAVAILABLE },
-                    rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        sig?.rssnr?.takeIf { it != CellInfo.UNAVAILABLE } else null,
-                    cqi = sig?.cqi?.takeIf { it != CellInfo.UNAVAILABLE },
-                    timingAdvance = sig?.timingAdvance?.takeIf { it != CellInfo.UNAVAILABLE }
+                    band = null, bandwidthMhz = bwKhz / 1000.0,
+                    pci = null, earfcn = null, downlinkFrequencyMhz = null
                 )
             }
         }
+    }
+
+    /** True if the modem reports carrier aggregation is currently active. */
+    private fun parseCaActiveFromSs(ss: ServiceState?): Boolean {
+        if (ss == null) return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try { ss.isUsingCarrierAggregation } catch (e: Throwable) {
+                // Fall back to string parse on builds where the method is restricted
+                ss.toString().contains("mIsUsingCarrierAggregation=true") ||
+                        ss.toString().contains("isUsingCarrierAggregation=true")
+            }
+        } else false
     }
 
     /** True if the device is camped on a non-terrestrial (satellite) cell. */
