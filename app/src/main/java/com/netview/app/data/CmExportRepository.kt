@@ -21,9 +21,11 @@ class CmExportRepository {
         return cell
     }
 
-    /** Secondary lookup by PCI + EARFCN — used for neighbour cell CM cross-reference. */
-    fun lookupByPciEarfcn(pci: Int, earfcn: Int): CmExportCell? =
-        _cells.value.values.firstOrNull { it.pci == pci && it.earfcn == earfcn }
+    /** Lookup by PCI + EARFCN for neighbour cross-reference. Returns null if ambiguous (>1 match). */
+    fun lookupByPciEarfcn(pci: Int, earfcn: Int): CmExportCell? {
+        val matches = _cells.value.values.filter { it.pci == pci && it.earfcn == earfcn }
+        return if (matches.size == 1) matches[0] else null
+    }
 
     fun clear() { _cells.value = emptyMap() }
 
