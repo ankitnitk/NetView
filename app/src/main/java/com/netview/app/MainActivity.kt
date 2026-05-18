@@ -82,6 +82,7 @@ class MainActivity : ComponentActivity() {
         val refresh by viewModel.refreshSecondsFlow.collectAsState(initial = SettingsRepository.DEFAULT_REFRESH)
         val debugLogging by viewModel.debugLoggingEnabledFlow.collectAsState(initial = false)
         val cmExportStatus by viewModel.cmExportStatus.collectAsState()
+        val cmExportLoaded by viewModel.cmExportLoaded.collectAsState()
 
         NavHost(navController = nav, startDestination = "main") {
             composable("main") {
@@ -98,7 +99,8 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     onOpenSettings = { nav.navigate("settings") },
-                    cmExportLookup = { enbId, sectorId -> viewModel.lookupCmExport(enbId, sectorId) }
+                    cmExportLookup = { enbId, sectorId -> viewModel.lookupCmExport(enbId, sectorId) },
+                    cmExportLoaded = cmExportLoaded
                 )
             }
             composable("settings") {

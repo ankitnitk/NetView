@@ -29,6 +29,7 @@ fun SimScreen(
     sim: SimSlotData,
     location: LocationData?,
     cmExportCell: CmExportCell? = null,
+    cmExportLoaded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -232,18 +233,34 @@ fun SimScreen(
         }
         // No CA card at all when on 2G/3G — concept doesn't apply.
 
-        // Network Parameters (CMExport match)
-        cmExportCell?.let { m ->
-            InfoCard(
-                title = "Network Parameters",
-                rows = listOf(
+        // Configuration as per CM Dump
+        if (cmExportLoaded) {
+            val cmRows = if (cmExportCell != null) {
+                val m = cmExportCell
+                listOf(
                     "Site" to m.lnbtsName,
                     "Cell" to m.lncelName,
                     "Tilt" to (m.tiltTenthDeg?.let { "%.1f°".format(it / 10.0) } ?: "—"),
-                    "RS Boost" to (m.dlRsBoost?.let { "${it} dB" } ?: "—"),
-                    "PMAX" to (m.pmaxDbm?.let { "${it} dBm" } ?: "—"),
-                    "MIMO Mode" to (m.dlMimoMode ?: "—")
+                    "RS Boost" to (m.dlRsBoost?.let { "$it dB" } ?: "—"),
+                    "PMAX" to (m.pmaxDbm?.let { "$it dBm" } ?: "—"),
+                    "RS Power" to (m.rsPowerDbm?.let { "$it dBm" } ?: "—"),
+                    "MIMO Mode" to (m.dlMimoMode ?: "—"),
+                    "SIB Priority" to (m.sibPriority?.toString() ?: "—"),
+                    "IRFIM List" to (m.irfimList ?: "—"),
+                    "LNHOIF List" to (m.lnhoifList ?: "—"),
+                    "CAPR List" to (m.caprList ?: "—"),
+                    "LNCEL Count" to (m.lncelCount?.toString() ?: "—"),
+                    "Band Count" to (m.bandCount?.toString() ?: "—"),
+                    "Band List" to (m.bandList ?: "—"),
+                    "LTE Mode" to (m.lteMode ?: "—")
                 )
+            } else {
+                listOf("Status" to "Cell not found in Configuration Dump")
+            }
+            InfoCard(
+                title = "Configuration as per CM Dump",
+                rows = cmRows,
+                collapsible = true
             )
         }
 

@@ -55,12 +55,18 @@ class CmExportRepository {
             val ssBytes = buffers["xl/sharedStrings.xml"]
                 ?: return@withContext Result.failure(Exception("sharedStrings.xml not found"))
 
-            val sheetTarget = findSheetFile(wbBytes, relsBytes, "LNCEL Details")
-            val sheetBytes = buffers["xl/$sheetTarget"]
-                ?: return@withContext Result.failure(Exception("LNCEL Details sheet not found (expected xl/$sheetTarget)"))
+            val lncelTarget = findSheetFile(wbBytes, relsBytes, "LNCEL Details")
+            val lncelBytes = buffers["xl/$lncelTarget"]
+                ?: return@withContext Result.failure(Exception("LNCEL Details sheet not found (expected xl/$lncelTarget)"))
+
+            val lnbtsTarget = findSheetFile(wbBytes, relsBytes, "LNBTS Details")
+            val lnbtsBytes = buffers["xl/$lnbtsTarget"]
+                ?: return@withContext Result.failure(Exception("LNBTS Details sheet not found (expected xl/$lnbtsTarget)"))
 
             val strings = parseSharedStrings(ssBytes.inputStream())
-            val parsed = parseLncelSheet(sheetBytes.inputStream(), strings)
+            // Parse site-level data first so it can be joined into each cell row
+            val siteMap = parseLnbtsSheet(lnbtsBytes.inputStream(), strings)
+            val parsed = parseLncelSheet(lncelBytes.inputStream(), strings, siteMap)
 
             // Index by (LNBTS ID, LNCEL ID) = (eNB ID, sector/LCR ID). Unique per cell.
             val map = parsed.associateBy { Pair(it.lnbtsId, it.lncelId) }
@@ -116,14 +122,70 @@ class CmExportRepository {
         return strings
     }
 
-    private fun parseLncelSheet(input: InputStream, strings: List<String>): List<CmExportCell> {
+    /** Parse LNBTS Details sheet → Map<LNBTS ID, field map> for site-level join. */
+    private fun parseLnbtsSheet(input: InputStream, strings: List<String>): Map<Int, Map<String, String>> {
+        val result = mutableMapOf<Int, Map<String, String>>()
+        val rows = parseSheetRows(input, strings)
+        if (rows.isEmpty()) return result
+        val colMap = rows[0]
+        for (i in 1 until rows.size) {
+            val fields = rows[i].entries.associate { (col, value) -> (colMap[col] ?: "") to value }
+            val lnbtsId = fields["LNBTS ID"]?.toIntOrNull() ?: continue
+            result[lnbtsId] = fields
+        }
+        return result
+    }
+
+    private fun parseLncelSheet(
+        input: InputStream,
+        strings: List<String>,
+        siteMap: Map<Int, Map<String, String>>
+    ): List<CmExportCell> {
         val result = mutableListOf<CmExportCell>()
+        val rows = parseSheetRows(input, strings)
+        if (rows.isEmpty()) return result
+        val colMap = rows[0]
+        for (i in 1 until rows.size) {
+            val fields = rows[i].entries.associate { (col, value) -> (colMap[col] ?: "") to value }
+            val lnbtsId = fields["LNBTS ID"]?.toIntOrNull() ?: continue
+            val lncelId = fields["LNCEL ID"]?.toIntOrNull() ?: continue
+            val lnbtsName = fields["LNBTS Name"]?.takeIf { it.isNotBlank() } ?: continue
+            val lncelName = fields["LNCEL Name"]?.takeIf { it.isNotBlank() } ?: continue
+            val site = siteMap[lnbtsId]
+            result.add(CmExportCell(
+                lnbtsId = lnbtsId,
+                lncelId = lncelId,
+                lnbtsName = lnbtsName,
+                lncelName = lncelName,
+                pci = fields["PCI"]?.toIntOrNull(),
+                earfcn = fields["EARFCN DL"]?.toIntOrNull(),
+                pmaxDbm = fields["PMAX (dBm)"]?.toDoubleOrNull(),
+                dlRsBoost = fields["dlRsBoost"]?.toDoubleOrNull(),
+                rsPowerDbm = fields["RS Power (dBm)"]?.toDoubleOrNull(),
+                dlMimoMode = fields["DL MIMO Mode"]?.takeIf { it.isNotBlank() },
+                tiltTenthDeg = fields["Tilt"]?.toIntOrNull(),
+                sibPriority = fields["SIB Priority"]?.toIntOrNull(),
+                irfimList = fields["IRFIM {Prio} List"]?.takeIf { it.isNotBlank() },
+                lnhoifList = fields["LNHOIF List"]?.takeIf { it.isNotBlank() },
+                caprList = fields["CAPR {Prio} List"]?.takeIf { it.isNotBlank() },
+                lncelCount = site?.get("LNCEL Count")?.toIntOrNull(),
+                bandCount = site?.get("Band Count")?.toIntOrNull(),
+                bandList = site?.get("Band List")?.takeIf { it.isNotBlank() },
+                lteMode = site?.get("LTE Mode")?.takeIf { it.isNotBlank() }
+            ))
+        }
+        return result
+    }
+
+    /**
+     * Generic sheet parser — returns a list of rows where each row is
+     * Map<colIndex, cellValue>. Row 0 is the header row (values are column names).
+     */
+    private fun parseSheetRows(input: InputStream, strings: List<String>): List<Map<Int, String>> {
+        val rows = mutableListOf<Map<Int, String>>()
         val parser: XmlPullParser = Xml.newPullParser()
         parser.setInput(input, "UTF-8")
 
-        // col index (0-based) → field name, populated from header row
-        var colMap = emptyMap<Int, String>()
-        var currentRow = 0
         var currentCells = mutableMapOf<Int, String>()
         var inCell = false
         var inValue = false
@@ -135,10 +197,7 @@ class CmExportRepository {
         while (event != XmlPullParser.END_DOCUMENT) {
             when (event) {
                 XmlPullParser.START_TAG -> when (parser.name) {
-                    "row" -> {
-                        currentRow = parser.getAttributeValue(null, "r")?.toIntOrNull() ?: 0
-                        currentCells = mutableMapOf()
-                    }
+                    "row" -> currentCells = mutableMapOf()
                     "c" -> {
                         val ref = parser.getAttributeValue(null, "r") ?: ""
                         currentColIdx = colLetterToIndex(ref.takeWhile { it.isLetter() })
@@ -152,50 +211,19 @@ class CmExportRepository {
                     "v" -> {
                         if (inValue) {
                             val raw = valueBuf.toString()
-                            val decoded = if (currentType == "s") {
-                                raw.toIntOrNull()?.let { strings.getOrNull(it) } ?: ""
-                            } else raw
+                            val decoded = if (currentType == "s")
+                                raw.toIntOrNull()?.let { strings.getOrNull(it) } ?: "" else raw
                             currentCells[currentColIdx] = decoded
                         }
                         inValue = false
                     }
                     "c" -> inCell = false
-                    "row" -> {
-                        when {
-                            currentRow == 1 -> colMap = currentCells.mapValues { it.value }
-                            currentRow > 1 && colMap.isNotEmpty() -> {
-                                decodeRow(currentCells, colMap)?.let { result.add(it) }
-                            }
-                        }
-                    }
+                    "row" -> rows.add(currentCells.toMap())
                 }
             }
             event = parser.next()
         }
-        return result
-    }
-
-    private fun decodeRow(row: Map<Int, String>, colMap: Map<Int, String>): CmExportCell? {
-        // Invert colMap to field-name → value for this row
-        val fields = row.entries.associate { (col, value) -> (colMap[col] ?: "") to value }
-
-        val lnbtsId = fields["LNBTS ID"]?.toIntOrNull() ?: return null
-        val lncelId = fields["LNCEL ID"]?.toIntOrNull() ?: return null
-        val lnbtsName = fields["LNBTS Name"]?.takeIf { it.isNotBlank() } ?: return null
-        val lncelName = fields["LNCEL Name"]?.takeIf { it.isNotBlank() } ?: return null
-
-        return CmExportCell(
-            lnbtsId = lnbtsId,
-            lncelId = lncelId,
-            lnbtsName = lnbtsName,
-            lncelName = lncelName,
-            pci = fields["PCI"]?.toIntOrNull(),
-            earfcn = fields["EARFCN DL"]?.toIntOrNull(),
-            pmaxDbm = fields["PMAX (dBm)"]?.toDoubleOrNull(),
-            dlRsBoost = fields["dlRsBoost"]?.toDoubleOrNull(),
-            dlMimoMode = fields["DL MIMO Mode"]?.takeIf { it.isNotBlank() },
-            tiltTenthDeg = fields["Tilt"]?.toIntOrNull()
-        )
+        return rows
     }
 
     private fun colLetterToIndex(letters: String): Int {

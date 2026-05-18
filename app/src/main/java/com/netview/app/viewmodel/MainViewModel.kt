@@ -15,9 +15,12 @@ import com.netview.app.data.TelephonyRepository
 import com.netview.app.utils.DebugLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -39,6 +42,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _cmExportStatus = MutableStateFlow<String>("No CMExport file loaded")
     val cmExportStatus: StateFlow<String> = _cmExportStatus.asStateFlow()
+
+    val cmExportLoaded: StateFlow<Boolean> = cmExportRepo.cells
+        .map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val refreshSecondsFlow = settingsRepo.refreshSeconds
     val debugLoggingEnabledFlow = settingsRepo.debugLoggingEnabled

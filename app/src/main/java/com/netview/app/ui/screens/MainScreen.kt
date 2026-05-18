@@ -23,7 +23,8 @@ fun MainScreen(
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
     onOpenSettings: () -> Unit,
-    cmExportLookup: ((Long?, Int?) -> CmExportCell?)? = null
+    cmExportLookup: ((Long?, Int?) -> CmExportCell?)? = null,
+    cmExportLoaded: Boolean = false
 ) {
     Scaffold(
         topBar = {
@@ -71,7 +72,7 @@ fun MainScreen(
                 val cmCell = sim.servingCell?.let { cell ->
                     cmExportLookup?.invoke(cell.enbId, cell.sectorId)
                 }
-                SimScreen(sim = sim, location = location, cmExportCell = cmCell)
+                SimScreen(sim = sim, location = location, cmExportCell = cmCell, cmExportLoaded = cmExportLoaded)
             }
         }
     }
