@@ -557,10 +557,27 @@ class TelephonyRepository(private val context: Context) {
                 ?: return emptyList()
             val scells = cells.filterIsInstance<CellInfoLte>()
                 .filter { it.cellConnectionStatus == CellInfo.CONNECTION_SECONDARY_SERVING }
-            if (scells.isEmpty()) return emptyList()
-            return (listOf(pcell) + scells).mapIndexed { idx, cell ->
-                cellInfoLteToCarrier(idx, if (idx == 0) "PCell" else "SCell", cell)
+            if (scells.isNotEmpty()) {
+                return (listOf(pcell) + scells).mapIndexed { idx, cell ->
+                    cellInfoLteToCarrier(idx, if (idx == 0) "PCell" else "SCell", cell)
+                }
             }
+            // Samsung fallback: CONNECTION_SECONDARY_SERVING never set; SCells share PCI with PCell on a different EARFCN
+            val servingPci = pcell.cellIdentity.pci.takeIf { it != CellInfo.UNAVAILABLE }
+            val servingEarfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                pcell.cellIdentity.earfcn.takeIf { it != CellInfo.UNAVAILABLE && it > 0 } else null
+            if (servingPci != null && servingEarfcn != null) {
+                val samePciScells = cells.filterIsInstance<CellInfoLte>()
+                    .filter { !it.isRegistered
+                        && it.cellIdentity.pci == servingPci
+                        && it.cellIdentity.earfcn.let { e -> e != CellInfo.UNAVAILABLE && e > 0 && e != servingEarfcn } }
+                if (samePciScells.isNotEmpty()) {
+                    return (listOf(pcell) + samePciScells).mapIndexed { idx, cell ->
+                        cellInfoLteToCarrier(idx, if (idx == 0) "PCell" else "SCell", cell)
+                    }
+                }
+            }
+            return emptyList()
         }
 
         // Pre-API 28: conservative eNB heuristic — requires valid CI and different EARFCNs.
@@ -806,7 +823,8 @@ class TelephonyRepository(private val context: Context) {
 
     /**
      * Parse mCellBandwidths array from ServiceState.toString(). Returns per-CC bandwidths
-     * in kHz (PCell first). Empty list if not present (e.g. 2G/3G where this field is empty).
+     * in kHz (PCell first). Samsung reports SCell BW as 0 when it can't determine it —
+     * we keep those zeros so the CC count is correct; callers treat 0 as "unknown BW".
      */
     private fun parseCellBandwidthsFromSs(ss: ServiceState?): List<Int> {
         if (ss == null) return emptyList()
@@ -814,7 +832,6 @@ class TelephonyRepository(private val context: Context) {
         val match = Regex("mCellBandwidths=\\[([\\d, ]+)]").find(str) ?: return emptyList()
         return match.groupValues[1].split(",")
             .mapNotNull { it.trim().toIntOrNull() }
-            .filter { it > 0 }
     }
 
     /**
@@ -836,18 +853,17 @@ class TelephonyRepository(private val context: Context) {
             if (idx == 0) {
                 CarrierComponent(
                     index = 0, role = "PCell",
-                    band = serving?.band, bandwidthMhz = bwKhz / 1000.0,
+                    band = serving?.band, bandwidthMhz = if (bwKhz > 0) bwKhz / 1000.0 else null,
                     pci = serving?.pci, earfcn = serving?.earfcn,
                     downlinkFrequencyMhz = null,
                     rsrp = serving?.rsrp, rsrq = serving?.rsrq, rssnr = serving?.rssnr,
                     cqi = serving?.cqi, timingAdvance = serving?.timingAdvance
                 )
             } else {
-                // SCell: bandwidth is from ServiceState (reliable). Band/PCI/signal are not
-                // available without PhysicalChannelConfig — leave them null rather than guess.
+                // SCell: bandwidth from ServiceState (Samsung reports 0 when unknown — treat as null).
                 CarrierComponent(
                     index = idx, role = "SCell",
-                    band = null, bandwidthMhz = bwKhz / 1000.0,
+                    band = null, bandwidthMhz = if (bwKhz > 0) bwKhz / 1000.0 else null,
                     pci = null, earfcn = null, downlinkFrequencyMhz = null
                 )
             }
@@ -905,9 +921,25 @@ class TelephonyRepository(private val context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return ca
 
         val scellCandidates = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            cellInfos.filterIsInstance<CellInfoLte>()
+            val byCss = cellInfos.filterIsInstance<CellInfoLte>()
                 .filter { it.cellConnectionStatus == CellInfo.CONNECTION_SECONDARY_SERVING }
                 .sortedByDescending { it.cellIdentity.earfcn }
+            if (byCss.isNotEmpty()) byCss else {
+                // Samsung: CONNECTION_SECONDARY_SERVING never set; SCells share PCI with PCell on a different EARFCN
+                val pcell = cellInfos.filterIsInstance<CellInfoLte>()
+                    .firstOrNull { it.cellConnectionStatus == CellInfo.CONNECTION_PRIMARY_SERVING }
+                    ?: cellInfos.filterIsInstance<CellInfoLte>().firstOrNull { it.isRegistered }
+                val servingPci = pcell?.cellIdentity?.pci?.takeIf { it != CellInfo.UNAVAILABLE }
+                val servingEarfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                    pcell?.cellIdentity?.earfcn?.takeIf { it != CellInfo.UNAVAILABLE && it > 0 } else null
+                if (servingPci != null && servingEarfcn != null) {
+                    cellInfos.filterIsInstance<CellInfoLte>()
+                        .filter { !it.isRegistered
+                            && it.cellIdentity.pci == servingPci
+                            && it.cellIdentity.earfcn.let { e -> e != CellInfo.UNAVAILABLE && e > 0 && e != servingEarfcn } }
+                        .sortedByDescending { it.cellIdentity.earfcn }
+                } else emptyList()
+            }
         } else {
             val pcellCi = cellInfos.filterIsInstance<CellInfoLte>()
                 .firstOrNull { it.isRegistered }?.cellIdentity?.ci ?: return ca
@@ -946,17 +978,30 @@ class TelephonyRepository(private val context: Context) {
         val lteByPci = cellInfos.filterIsInstance<CellInfoLte>()
             .filter { it.cellIdentity.pci != CellInfo.UNAVAILABLE }
             .associateBy { it.cellIdentity.pci }
+        // Fallback index by EARFCN for Samsung where cfg.physicalCellId=-1 — best RSRP per EARFCN
+        val lteByEarfcn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            cellInfos.filterIsInstance<CellInfoLte>()
+                .filter { it.cellIdentity.earfcn != CellInfo.UNAVAILABLE && it.cellIdentity.earfcn > 0 }
+                .groupBy { it.cellIdentity.earfcn }
+                .mapValues { (_, cells) -> cells.maxByOrNull { it.cellSignalStrength.rsrp } }
+        } else emptyMap()
         return ca.map { cc ->
-            val cell = cc.pci?.let { lteByPci[it] } ?: return@map cc
+            val cell = when {
+                cc.pci != null -> lteByPci[cc.pci]
+                cc.earfcn != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N -> lteByEarfcn[cc.earfcn]
+                else -> null
+            } ?: return@map cc
             val sig = cell.cellSignalStrength
             val id = cell.cellIdentity
             val earfcnFromCi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
                 id.earfcn.takeIf { it != CellInfo.UNAVAILABLE && it > 0 } else null
+            val pciFromCi = id.pci.takeIf { it != CellInfo.UNAVAILABLE }
             val bandFromCi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && id.bands.isNotEmpty())
                 "B${id.bands.first()}"
             else BandMapper.lteBand(earfcnFromCi)
             cc.copy(
                 band = if (cc.band == null || cc.band == "B0") bandFromCi else cc.band,
+                pci = cc.pci ?: pciFromCi,
                 earfcn = cc.earfcn ?: earfcnFromCi,
                 rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE },
                 rsrq = sig.rsrq.takeIf { it != CellInfo.UNAVAILABLE },
