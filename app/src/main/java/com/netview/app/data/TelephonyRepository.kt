@@ -94,7 +94,7 @@ class TelephonyRepository(private val context: Context) {
         val serving0 = parseServingFromServiceState(tm, serviceState) ?: parseServingCell(cellInfos)
         // TA from SignalStrength.cellSignalStrengths is unreliable on Samsung — the modem only
         // populates it in the CellInfoLte path. Patch it in when the SS path leaves it null.
-        val serving = if (serving0?.rat == "LTE" && serving0.timingAdvance == null) {
+        val serving = if (serving0 != null && serving0.rat == "LTE" && serving0.timingAdvance == null) {
             val ta = cellInfos.filterIsInstance<CellInfoLte>()
                 .firstOrNull { it.isRegistered }
                 ?.cellSignalStrength?.timingAdvance
