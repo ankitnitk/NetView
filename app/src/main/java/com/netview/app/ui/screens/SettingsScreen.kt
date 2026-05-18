@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -22,6 +24,12 @@ fun SettingsScreen(
     cmExportStatus: String,
     onLoadCmExport: (Uri) -> Unit,
     onClearCmExport: () -> Unit,
+    wcdmaCmExportStatus: String,
+    onLoadWcdmaCmExport: (Uri) -> Unit,
+    onClearWcdmaCmExport: () -> Unit,
+    gsmCmExportStatus: String,
+    onLoadGsmCmExport: (Uri) -> Unit,
+    onClearGsmCmExport: () -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -38,6 +46,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -93,40 +102,29 @@ fun SettingsScreen(
                 }
             }
 
-            Card {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    val fileLauncher = rememberLauncherForActivityResult(
-                        ActivityResultContracts.OpenDocument()
-                    ) { uri -> uri?.let { onLoadCmExport(it) } }
+            CmExportCard(
+                title = "4G CMExport File",
+                description = "Nokia LTE CMExport Excel file for site/cell parameter lookup",
+                status = cmExportStatus,
+                onLoad = onLoadCmExport,
+                onClear = onClearCmExport,
+            )
 
-                    Text("CMExport File", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Nokia 4G CMExport Excel file for site/cell parameter lookup",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        cmExportStatus,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (cmExportStatus.startsWith("Loaded"))
-                            MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { fileLauncher.launch(arrayOf("*/*")) }) {
-                            Text("Load File")
-                        }
-                        if (cmExportStatus.startsWith("Loaded")) {
-                            OutlinedButton(onClick = onClearCmExport) {
-                                Text("Clear")
-                            }
-                        }
-                    }
-                }
-            }
+            CmExportCard(
+                title = "3G CMExport File",
+                description = "Nokia WCDMA CMExport Excel file for 3G cell parameter lookup",
+                status = wcdmaCmExportStatus,
+                onLoad = onLoadWcdmaCmExport,
+                onClear = onClearWcdmaCmExport,
+            )
+
+            CmExportCard(
+                title = "2G CMExport File",
+                description = "Nokia GSM CMExport Excel file for 2G cell parameter lookup",
+                status = gsmCmExportStatus,
+                onLoad = onLoadGsmCmExport,
+                onClear = onClearGsmCmExport,
+            )
 
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -140,6 +138,50 @@ fun SettingsScreen(
                                 "and carrier aggregation status for each SIM. GPS shown live.",
                         style = MaterialTheme.typography.bodySmall
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CmExportCard(
+    title: String,
+    description: String,
+    status: String,
+    onLoad: (Uri) -> Unit,
+    onClear: () -> Unit,
+) {
+    Card {
+        Column(modifier = Modifier.padding(16.dp)) {
+            val fileLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.OpenDocument()
+            ) { uri -> uri?.let { onLoad(it) } }
+
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                status,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (status.startsWith("Loaded"))
+                    MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { fileLauncher.launch(arrayOf("*/*")) }) {
+                    Text("Load File")
+                }
+                if (status.startsWith("Loaded")) {
+                    OutlinedButton(onClick = onClear) {
+                        Text("Clear")
+                    }
                 }
             }
         }

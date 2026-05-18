@@ -11,8 +11,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.netview.app.data.CmExportCell
+import com.netview.app.data.GsmCmCell
 import com.netview.app.data.LocationData
 import com.netview.app.data.SimSlotData
+import com.netview.app.data.WcdmaCmCell
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,7 +26,12 @@ fun MainScreen(
     onRequestPermissions: () -> Unit,
     onOpenSettings: () -> Unit,
     cmExportLookup: ((Long?, Int?, String?, String?) -> CmExportCell?)? = null,
-    cmExportLoaded: Boolean = false
+    cmExportLoaded: Boolean = false,
+    cmNeighborLookup: ((Int, Int) -> CmExportCell?)? = null,
+    wcdmaCmLookup: ((Int?, Int?, Int?, String?, String?) -> WcdmaCmCell?)? = null,
+    wcdmaCmLoaded: Boolean = false,
+    gsmCmLookup: ((Int?, Int?, String?, String?) -> GsmCmCell?)? = null,
+    gsmCmLoaded: Boolean = false,
 ) {
     Scaffold(
         topBar = {
@@ -69,10 +76,29 @@ fun MainScreen(
 
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                 val sim = sims[page]
-                val cmCell = sim.servingCell?.let { cell ->
-                    cmExportLookup?.invoke(cell.enbId, cell.sectorId, sim.mcc, sim.mnc)
+                val cell = sim.servingCell
+                val cmCell = cell?.let {
+                    cmExportLookup?.invoke(it.enbId, it.sectorId, sim.mcc, sim.mnc)
                 }
-                SimScreen(sim = sim, location = location, cmExportCell = cmCell, cmExportLoaded = cmExportLoaded)
+                val wcdmaCell = if (cell?.rat == "WCDMA") {
+                    val rncId = cell.cellId?.let { (it shr 16).toInt() }
+                    val wcelId = cell.cellId?.let { (it and 0xFFFF).toInt() }
+                    wcdmaCmLookup?.invoke(rncId, wcelId, cell.uarfcn, sim.mcc, sim.mnc)
+                } else null
+                val gsmCell = if (cell?.rat == "GSM") {
+                    gsmCmLookup?.invoke(cell.tac, cell.cellId?.toInt(), sim.mcc, sim.mnc)
+                } else null
+                SimScreen(
+                    sim = sim,
+                    location = location,
+                    cmExportCell = cmCell,
+                    cmExportLoaded = cmExportLoaded,
+                    cmNeighborLookup = cmNeighborLookup,
+                    wcdmaCmCell = wcdmaCell,
+                    wcdmaCmLoaded = wcdmaCmLoaded,
+                    gsmCmCell = gsmCell,
+                    gsmCmLoaded = gsmCmLoaded,
+                )
             }
         }
     }

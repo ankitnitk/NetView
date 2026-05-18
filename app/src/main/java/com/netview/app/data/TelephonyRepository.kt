@@ -239,7 +239,8 @@ class TelephonyRepository(private val context: Context) {
             nrCell = nrCellDisplay,
             carrierAggregation = ca,
             isNonTerrestrial = isNtn,
-            diagnostics = diagnostics
+            diagnostics = diagnostics,
+            neighborCells = parseNeighborCells(cellInfos),
         )
     }
 
@@ -694,6 +695,31 @@ class TelephonyRepository(private val context: Context) {
         } catch (e: Throwable) {
             DebugLog.w("PSL", "tm.listen FAILED sub=$subId: ${e.javaClass.simpleName}: ${e.message}")
         }
+    }
+
+    private fun parseNeighborCells(cellInfos: List<CellInfo>): List<NeighborCell> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return emptyList()
+        return cellInfos.filterIsInstance<CellInfoLte>()
+            .filter { !it.isRegistered }
+            .mapNotNull { c ->
+                val id = c.cellIdentity
+                val sig = c.cellSignalStrength
+                val pci = id.pci.takeIf { it != CellInfo.UNAVAILABLE } ?: return@mapNotNull null
+                val rsrp = sig.rsrp.takeIf { it != CellInfo.UNAVAILABLE } ?: return@mapNotNull null
+                val earfcn = id.earfcn.takeIf { it != CellInfo.UNAVAILABLE }
+                NeighborCell(
+                    rat = "LTE",
+                    pci = pci,
+                    earfcn = earfcn,
+                    band = BandMapper.lteBand(earfcn),
+                    rsrp = rsrp,
+                    rsrq = sig.rsrq.takeIf { it != CellInfo.UNAVAILABLE },
+                    rssnr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                        sig.rssnr.takeIf { it != CellInfo.UNAVAILABLE } else null,
+                )
+            }
+            .sortedByDescending { it.rsrp }
+            .take(10)
     }
 
     fun release() {

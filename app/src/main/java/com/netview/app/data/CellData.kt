@@ -18,7 +18,21 @@ data class SimSlotData(
     val nrCell: ServingCellInfo? = null,   // NR leg on NSA — shown alongside LTE anchor
     val carrierAggregation: List<CarrierComponent> = emptyList(),
     val isNonTerrestrial: Boolean = false, // true when device is on a satellite (NTN) cell
-    val diagnostics: DiagnosticInfo = DiagnosticInfo()
+    val diagnostics: DiagnosticInfo = DiagnosticInfo(),
+    val neighborCells: List<NeighborCell> = emptyList(),
+    val dlThroughputMbps: Double? = null,
+    val ulThroughputMbps: Double? = null,
+    val timeOnCellSeconds: Long? = null,
+)
+
+data class NeighborCell(
+    val rat: String,
+    val pci: Int?,
+    val earfcn: Int?,
+    val band: String?,
+    val rsrp: Int?,
+    val rsrq: Int?,
+    val rssnr: Int?,
 )
 
 /** Diagnostic counters surfaced in the UI so we can see what Samsung is actually giving us. */

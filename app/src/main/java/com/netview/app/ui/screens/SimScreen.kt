@@ -18,12 +18,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.netview.app.data.CmExportCell
+import com.netview.app.data.GsmCmCell
 import com.netview.app.data.LocationData
 import com.netview.app.data.SimSlotData
+import com.netview.app.data.WcdmaCmCell
 import com.netview.app.ui.components.InfoCard
 import com.netview.app.ui.components.TechBadge
+import com.netview.app.utils.EarfcnUtils
 import com.netview.app.utils.Formatters
 import com.netview.app.utils.ShareFormatter
+import kotlin.math.log10
 
 @Composable
 fun SimScreen(
@@ -31,6 +35,11 @@ fun SimScreen(
     location: LocationData?,
     cmExportCell: CmExportCell? = null,
     cmExportLoaded: Boolean = false,
+    cmNeighborLookup: ((Int, Int) -> CmExportCell?)? = null,
+    wcdmaCmCell: WcdmaCmCell? = null,
+    wcdmaCmLoaded: Boolean = false,
+    gsmCmCell: GsmCmCell? = null,
+    gsmCmLoaded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val ctx = LocalContext.current
@@ -107,10 +116,8 @@ fun SimScreen(
                     rows += "Cell ID (CID)" to Formatters.longOrDash(c.cellId)
                     rows += "PCI" to Formatters.intOrDash(c.pci)
                     rows += "TAC" to Formatters.intOrDash(c.tac)
-                    rows += "EARFCN" to Formatters.intOrDash(c.earfcn)
+                    rows += "EARFCN" to earfcnWithFreq(c.earfcn)
                     rows += "Band" to Formatters.stringOrDash(c.band)
-                    // Bandwidth: cell-identity bandwidth → PCell from CA list (which on
-                    // Samsung comes from ServiceState.mCellBandwidths parse)
                     val bw = c.bandwidthMhz
                         ?: sim.carrierAggregation.firstOrNull()?.bandwidthMhz
                     rows += "Bandwidth" to (bw?.let { "%.1f MHz".format(it) } ?: "—")
@@ -126,8 +133,6 @@ fun SimScreen(
                 }
                 "WCDMA" -> {
                     rows += "LAC" to Formatters.intOrDash(c.tac)
-                    // UMTS Cell Identity = RNC_ID (upper 12 bits) + CID (lower 16 bits)
-                    // NetMonster: "CI" = full 28-bit, "CID" = lower 16-bit (within RNC).
                     val ci = c.cellId
                     rows += "CI" to Formatters.longOrDash(ci)
                     if (ci != null) {
@@ -146,6 +151,11 @@ fun SimScreen(
                     rows += "Band" to Formatters.stringOrDash(c.band)
                 }
             }
+            // Throughput and cell time (all RATs)
+            sim.dlThroughputMbps?.let { rows += "DL Speed" to formatMbps(it) }
+            sim.ulThroughputMbps?.let { rows += "UL Speed" to formatMbps(it) }
+            sim.timeOnCellSeconds?.let { rows += "Time on Cell" to formatDuration(it) }
+
             InfoCard(title = "Serving Cell", rows = rows)
 
             // Signal
@@ -184,7 +194,7 @@ fun SimScreen(
             rows = listOf("Status" to "No cell info — check permissions")
         )
 
-        // 5G NR leg (NSA only — companion to the LTE anchor)
+        // 5G NR leg (NSA only)
         sim.nrCell?.let { nr ->
             val rows = mutableListOf<Pair<String, String>>()
             rows += "RAT" to "NR (NSA secondary)"
@@ -242,10 +252,38 @@ fun SimScreen(
                 rows = listOf("CA Status" to "—")
             )
         }
-        // No CA card at all when on 2G/3G — concept doesn't apply.
 
-        // Configuration as per CM Dump
-        if (cmExportLoaded) {
+        // Neighbour Cells (LTE only — CID unavailable so no CM key match, use PCI+EARFCN for CM lookup)
+        if (sim.neighborCells.isNotEmpty()) {
+            val rows = mutableListOf<Pair<String, String>>()
+            sim.neighborCells.forEach { n ->
+                rows += "PCI ${n.pci ?: "—"}" to "${n.band ?: "—"} • EARFCN ${earfcnWithFreq(n.earfcn)}"
+                val sigParts = buildList {
+                    n.rsrp?.let { add("RSRP $it dBm") }
+                    n.rsrq?.let { add("RSRQ $it dB") }
+                }
+                if (sigParts.isNotEmpty()) rows += "  Signal" to sigParts.joinToString("  ")
+                if (n.pci != null && n.earfcn != null && cmNeighborLookup != null) {
+                    cmNeighborLookup(n.pci, n.earfcn)?.let { cm ->
+                        val cmParts = buildList {
+                            cm.rsPowerDbm?.let { add("RS Power $it dBm") }
+                            cm.tiltTenthDeg?.let { add("Tilt ${"%.1f".format(it / 10.0)}°") }
+                            cm.dlRsBoost?.let { add("RS Boost $it dB") }
+                        }
+                        if (cmParts.isNotEmpty()) rows += "  Config" to cmParts.joinToString("  ")
+                    }
+                }
+            }
+            InfoCard(
+                title = "Neighbour Cells (${sim.neighborCells.size})",
+                rows = rows,
+                collapsible = true
+            )
+        }
+
+        // Configuration as per CM Dump — RAT-specific cards
+        val rat = sim.servingCell?.rat
+        if (rat == "LTE" && cmExportLoaded) {
             val cmRows = if (cmExportCell != null) {
                 val m = cmExportCell
                 listOf(
@@ -264,6 +302,53 @@ fun SimScreen(
                     "Band Count" to (m.bandCount?.toString() ?: "—"),
                     "Band List" to (m.bandList ?: "—"),
                     "LTE Mode" to (m.lteMode ?: "—")
+                )
+            } else {
+                listOf("Status" to "Cell not found in Configuration Dump")
+            }
+            InfoCard(
+                title = "Configuration as per CM Dump",
+                rows = cmRows,
+                collapsible = true
+            )
+        }
+
+        if (rat == "WCDMA" && wcdmaCmLoaded) {
+            val cmRows = if (wcdmaCmCell != null) {
+                val m = wcdmaCmCell
+                listOf(
+                    "Site" to m.wbtsName,
+                    "Cell" to m.wcelName,
+                    "PSC" to (m.psc?.toString() ?: "—"),
+                    "Tilt" to (m.tiltTenthDeg?.let { "%.1f°".format(it / 10.0) } ?: "—"),
+                    "CPICH" to (m.cpichDbm?.let { "$it dBm" } ?: "—"),
+                    "PMAX" to (m.pmaxDbm?.let { "$it dBm" } ?: "—"),
+                )
+            } else {
+                listOf("Status" to "Cell not found in Configuration Dump")
+            }
+            InfoCard(
+                title = "Configuration as per CM Dump",
+                rows = cmRows,
+                collapsible = true
+            )
+        }
+
+        if (rat == "GSM" && gsmCmLoaded) {
+            val cmRows = if (gsmCmCell != null) {
+                val m = gsmCmCell
+                val trxPowerDbm = m.masterTrxPowerW
+                    ?.takeIf { it > 0 }
+                    ?.let { "%.0f dBm".format(10.0 * log10(it) + 30.0) }
+                    ?: "—"
+                listOf(
+                    "Site" to m.bcfName,
+                    "Cell" to m.cellName,
+                    "Bands" to (m.bands ?: "—"),
+                    "BCCH" to (m.bcch?.toString() ?: "—"),
+                    "NCC / BCC" to "${m.ncc ?: "—"} / ${m.bcc ?: "—"}",
+                    "Tilt" to (m.masterTiltTenthDeg?.let { "%.1f°".format(it / 10.0) } ?: "—"),
+                    "TRX Power" to trxPowerDbm,
                 )
             } else {
                 listOf("Status" to "Cell not found in Configuration Dump")
@@ -296,4 +381,20 @@ fun SimScreen(
         Spacer(Modifier.height(24.dp))
         } // end scrollable Column
     } // end outer Column
+}
+
+private fun earfcnWithFreq(earfcn: Int?): String {
+    if (earfcn == null) return "—"
+    val freq = EarfcnUtils.lteDlFreqMhz(earfcn)?.let { " (%.1f MHz)".format(it) } ?: ""
+    return "$earfcn$freq"
+}
+
+private fun formatMbps(mbps: Double): String {
+    return if (mbps < 0.01) "< 0.01 Mbps" else "%.2f Mbps".format(mbps)
+}
+
+private fun formatDuration(seconds: Long): String = when {
+    seconds < 60 -> "${seconds}s"
+    seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
+    else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
 }

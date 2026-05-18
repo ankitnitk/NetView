@@ -33,7 +33,6 @@ class MainActivity : ComponentActivity() {
         if (granted) viewModel.onPermissionsGranted()
     }
 
-    // Request READ_PRECISE_PHONE_STATE separately — needed for PhysicalChannelConfig (CA/BW)
     private val precisePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { viewModel.refresh() }
@@ -83,6 +82,10 @@ class MainActivity : ComponentActivity() {
         val debugLogging by viewModel.debugLoggingEnabledFlow.collectAsState(initial = false)
         val cmExportStatus by viewModel.cmExportStatus.collectAsState()
         val cmExportLoaded by viewModel.cmExportLoaded.collectAsState()
+        val wcdmaCmExportStatus by viewModel.wcdmaCmExportStatus.collectAsState()
+        val wcdmaCmExportLoaded by viewModel.wcdmaCmExportLoaded.collectAsState()
+        val gsmCmExportStatus by viewModel.gsmCmExportStatus.collectAsState()
+        val gsmCmExportLoaded by viewModel.gsmCmExportLoaded.collectAsState()
 
         NavHost(navController = nav, startDestination = "main") {
             composable("main") {
@@ -99,8 +102,21 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     onOpenSettings = { nav.navigate("settings") },
-                    cmExportLookup = { enbId, sectorId, mcc, mnc -> viewModel.lookupCmExport(enbId, sectorId, mcc, mnc) },
-                    cmExportLoaded = cmExportLoaded
+                    cmExportLookup = { enbId, sectorId, mcc, mnc ->
+                        viewModel.lookupCmExport(enbId, sectorId, mcc, mnc)
+                    },
+                    cmExportLoaded = cmExportLoaded,
+                    cmNeighborLookup = { pci, earfcn ->
+                        viewModel.lookupCmExportByPciEarfcn(pci, earfcn)
+                    },
+                    wcdmaCmLookup = { rncId, wcelId, uarfcn, mcc, mnc ->
+                        viewModel.lookupWcdmaCmExport(rncId, wcelId, uarfcn, mcc, mnc)
+                    },
+                    wcdmaCmLoaded = wcdmaCmExportLoaded,
+                    gsmCmLookup = { lac, cellId, mcc, mnc ->
+                        viewModel.lookupGsmCmExport(lac, cellId, mcc, mnc)
+                    },
+                    gsmCmLoaded = gsmCmExportLoaded,
                 )
             }
             composable("settings") {
@@ -113,6 +129,12 @@ class MainActivity : ComponentActivity() {
                     cmExportStatus = cmExportStatus,
                     onLoadCmExport = { uri -> viewModel.loadCmExport(uri) },
                     onClearCmExport = { viewModel.clearCmExport() },
+                    wcdmaCmExportStatus = wcdmaCmExportStatus,
+                    onLoadWcdmaCmExport = { uri -> viewModel.loadWcdmaCmExport(uri) },
+                    onClearWcdmaCmExport = { viewModel.clearWcdmaCmExport() },
+                    gsmCmExportStatus = gsmCmExportStatus,
+                    onLoadGsmCmExport = { uri -> viewModel.loadGsmCmExport(uri) },
+                    onClearGsmCmExport = { viewModel.clearGsmCmExport() },
                     onBack = { nav.popBackStack() }
                 )
             }

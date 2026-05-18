@@ -17,6 +17,8 @@ class SettingsRepository(private val context: Context) {
         private val REFRESH_SECONDS = intPreferencesKey("refresh_seconds")
         private val DEBUG_LOGGING = booleanPreferencesKey("debug_logging")
         private val CMEXPORT_URI = stringPreferencesKey("cmexport_uri")
+        private val WCDMA_CMEXPORT_URI = stringPreferencesKey("wcdma_cmexport_uri")
+        private val GSM_CMEXPORT_URI = stringPreferencesKey("gsm_cmexport_uri")
         const val DEFAULT_REFRESH = 2
         const val MIN_REFRESH = 1
         const val MAX_REFRESH = 60
@@ -34,6 +36,14 @@ class SettingsRepository(private val context: Context) {
         prefs[CMEXPORT_URI]
     }
 
+    val wcdmaCmExportUri: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[WCDMA_CMEXPORT_URI]
+    }
+
+    val gsmCmExportUri: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[GSM_CMEXPORT_URI]
+    }
+
     suspend fun setRefreshSeconds(seconds: Int) {
         val clamped = seconds.coerceIn(MIN_REFRESH, MAX_REFRESH)
         context.dataStore.edit { it[REFRESH_SECONDS] = clamped }
@@ -46,6 +56,18 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCmExportUri(uri: String?) {
         context.dataStore.edit {
             if (uri != null) it[CMEXPORT_URI] = uri else it.remove(CMEXPORT_URI)
+        }
+    }
+
+    suspend fun setWcdmaCmExportUri(uri: String?) {
+        context.dataStore.edit {
+            if (uri != null) it[WCDMA_CMEXPORT_URI] = uri else it.remove(WCDMA_CMEXPORT_URI)
+        }
+    }
+
+    suspend fun setGsmCmExportUri(uri: String?) {
+        context.dataStore.edit {
+            if (uri != null) it[GSM_CMEXPORT_URI] = uri else it.remove(GSM_CMEXPORT_URI)
         }
     }
 }
