@@ -208,7 +208,7 @@ class TelephonyRepository(private val context: Context) {
             val caActiveFromSs = parseCaActiveFromSs(serviceState)
             val fromSs = if (cached.isEmpty() && direct.isEmpty())
                 buildCaFromBandwidths(ssBws, servingEnriched, caActiveFromSs) else emptyList()
-            when {
+            val raw = when {
                 cached.isNotEmpty() -> enrichCaWithSignal(cached, cellInfos)
                 direct.isNotEmpty() -> enrichCaWithSignal(direct, cellInfos)
                 fromSs.isNotEmpty() -> {
@@ -217,6 +217,11 @@ class TelephonyRepository(private val context: Context) {
                 }
                 else -> detectCaFromCellInfo(cellInfos)
             }
+            // Deduplicate by EARFCN — Samsung can report the same physical carrier
+            // twice in mCellBandwidths, producing e.g. 5CC when the real session is 3CC.
+            val seen = mutableSetOf<Int>()
+            raw.filter { it.earfcn == null || seen.add(it.earfcn) }
+               .mapIndexed { idx, cc -> cc.copy(index = idx) }
         }
 
         // Serving network PLMN — use ServiceState.operatorNumeric, not home SIM (critical for roaming)
