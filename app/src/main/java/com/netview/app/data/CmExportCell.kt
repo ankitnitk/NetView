@@ -21,6 +21,8 @@ data class CmExportCell(
     val lnhoifList: String?,
     val caprList: String?,
     // Site-level params (from LNBTS Details sheet, joined by LNBTS ID)
+    val mcc: Int?,
+    val mnc: Int?,
     val lncelCount: Int?,
     val bandCount: Int?,
     val bandList: String?,

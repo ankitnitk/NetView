@@ -16,8 +16,13 @@ class CmExportRepository {
     private val _cells = MutableStateFlow<Map<Pair<Int, Int>, CmExportCell>>(emptyMap())
     val cells: StateFlow<Map<Pair<Int, Int>, CmExportCell>> = _cells
 
-    /** Match on eNB ID (= CID/256 from phone) + LCR/sector ID (= CID%256) = LNBTS ID + LNCEL ID. */
-    fun lookup(enbId: Int, lncelId: Int): CmExportCell? = _cells.value[Pair(enbId, lncelId)]
+    /** Match on eNB ID + LCR/sector ID, then confirm MCC/MNC when both sides have the value. */
+    fun lookup(enbId: Int, lncelId: Int, mcc: Int?, mnc: Int?): CmExportCell? {
+        val cell = _cells.value[Pair(enbId, lncelId)] ?: return null
+        if (mcc != null && cell.mcc != null && cell.mcc != mcc) return null
+        if (mnc != null && cell.mnc != null && cell.mnc != mnc) return null
+        return cell
+    }
 
     fun clear() { _cells.value = emptyMap() }
 
@@ -168,6 +173,8 @@ class CmExportRepository {
                 irfimList = fields["IRFIM {Prio} List"]?.takeIf { it.isNotBlank() },
                 lnhoifList = fields["LNHOIF List"]?.takeIf { it.isNotBlank() },
                 caprList = fields["CAPR {Prio} List"]?.takeIf { it.isNotBlank() },
+                mcc = site?.get("MCC")?.toIntOrNull(),
+                mnc = site?.get("MNC")?.toIntOrNull(),
                 lncelCount = site?.get("LNCEL Count")?.toIntOrNull(),
                 bandCount = site?.get("Band Count")?.toIntOrNull(),
                 bandList = site?.get("Band List")?.takeIf { it.isNotBlank() },

@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,16 +33,15 @@ fun SimScreen(
     cmExportLoaded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Header
-        val ctx = LocalContext.current
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    val ctx = LocalContext.current
+    Column(modifier = modifier.fillMaxSize()) {
+        // Pinned header — always visible
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = sim.carrierName,
@@ -68,6 +68,17 @@ fun SimScreen(
                 Icon(Icons.Default.Share, contentDescription = "Share")
             }
         }
+        HorizontalDivider()
+
+        // Scrollable cards
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
 
         // SIM / network identity
         InfoCard(
@@ -283,5 +294,6 @@ fun SimScreen(
         )
 
         Spacer(Modifier.height(24.dp))
-    }
+        } // end scrollable Column
+    } // end outer Column
 }

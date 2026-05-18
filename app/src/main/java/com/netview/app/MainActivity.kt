@@ -99,7 +99,7 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     onOpenSettings = { nav.navigate("settings") },
-                    cmExportLookup = { enbId, sectorId -> viewModel.lookupCmExport(enbId, sectorId) },
+                    cmExportLookup = { enbId, sectorId, mcc, mnc -> viewModel.lookupCmExport(enbId, sectorId, mcc, mnc) },
                     cmExportLoaded = cmExportLoaded
                 )
             }

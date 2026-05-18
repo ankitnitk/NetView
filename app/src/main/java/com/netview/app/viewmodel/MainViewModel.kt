@@ -131,10 +131,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Match on enbId (CID/256) = LNBTS ID and sectorId (CID%256) = LNCEL ID. */
-    fun lookupCmExport(enbId: Long?, sectorId: Int?): CmExportCell? {
+    fun lookupCmExport(enbId: Long?, sectorId: Int?, mcc: String?, mnc: String?): CmExportCell? {
         if (enbId == null || sectorId == null) return null
-        return cmExportRepo.lookup(enbId.toInt(), sectorId)
+        return cmExportRepo.lookup(enbId.toInt(), sectorId, mcc?.toIntOrNull(), mnc?.toIntOrNull())
     }
 
     override fun onCleared() {
