@@ -55,7 +55,7 @@ fun MainScreen(
                 PermissionPrompt(onRequestPermissions)
                 return@Column
             }
-            if (sims.isEmpty()) {
+            if (sims.isEmpty() && wifiState == null) {
                 EmptyState()
                 return@Column
             }
