@@ -15,6 +15,7 @@ import com.netview.app.data.GsmCmCell
 import com.netview.app.data.LocationData
 import com.netview.app.data.SimSlotData
 import com.netview.app.data.WcdmaCmCell
+import com.netview.app.data.WifiState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,6 +33,7 @@ fun MainScreen(
     wcdmaCmLoaded: Boolean = false,
     gsmCmLookup: ((Int?, Int?, String?, String?) -> GsmCmCell?)? = null,
     gsmCmLoaded: Boolean = false,
+    wifiState: WifiState? = null,
 ) {
     Scaffold(
         topBar = {
@@ -58,10 +60,11 @@ fun MainScreen(
                 return@Column
             }
 
-            val pagerState = rememberPagerState(pageCount = { sims.size })
+            val totalPages = sims.size + if (wifiState != null) 1 else 0
+            val pagerState = rememberPagerState(pageCount = { totalPages })
             val scope = rememberCoroutineScope()
 
-            if (sims.size > 1) {
+            if (totalPages > 1) {
                 TabRow(selectedTabIndex = pagerState.currentPage) {
                     sims.forEachIndexed { index, sim ->
                         SimTab(
@@ -71,34 +74,46 @@ fun MainScreen(
                             sublabel = sim.carrierName
                         )
                     }
+                    if (wifiState != null) {
+                        SimTab(
+                            selected = pagerState.currentPage == sims.size,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(sims.size) } },
+                            label = "Wi-Fi",
+                            sublabel = wifiState.connection?.ssid ?: "On"
+                        )
+                    }
                 }
             }
 
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                val sim = sims[page]
-                val cell = sim.servingCell
-                val cmCell = cell?.let {
-                    cmExportLookup?.invoke(it.enbId, it.sectorId, sim.mcc, sim.mnc)
+                if (wifiState != null && page == sims.size) {
+                    WifiScreen(wifiState = wifiState)
+                } else {
+                    val sim = sims[page]
+                    val cell = sim.servingCell
+                    val cmCell = cell?.let {
+                        cmExportLookup?.invoke(it.enbId, it.sectorId, sim.mcc, sim.mnc)
+                    }
+                    val wcdmaCell = if (cell?.rat == "WCDMA") {
+                        val rncId = cell.cellId?.let { (it shr 16).toInt() }
+                        val wcelId = cell.cellId?.let { (it and 0xFFFF).toInt() }
+                        wcdmaCmLookup?.invoke(rncId, wcelId, cell.uarfcn, sim.mcc, sim.mnc)
+                    } else null
+                    val gsmCell = if (cell?.rat == "GSM") {
+                        gsmCmLookup?.invoke(cell.tac, cell.cellId?.toInt(), sim.mcc, sim.mnc)
+                    } else null
+                    SimScreen(
+                        sim = sim,
+                        location = location,
+                        cmExportCell = cmCell,
+                        cmExportLoaded = cmExportLoaded,
+                        cmNeighborLookup = cmNeighborLookup,
+                        wcdmaCmCell = wcdmaCell,
+                        wcdmaCmLoaded = wcdmaCmLoaded,
+                        gsmCmCell = gsmCell,
+                        gsmCmLoaded = gsmCmLoaded,
+                    )
                 }
-                val wcdmaCell = if (cell?.rat == "WCDMA") {
-                    val rncId = cell.cellId?.let { (it shr 16).toInt() }
-                    val wcelId = cell.cellId?.let { (it and 0xFFFF).toInt() }
-                    wcdmaCmLookup?.invoke(rncId, wcelId, cell.uarfcn, sim.mcc, sim.mnc)
-                } else null
-                val gsmCell = if (cell?.rat == "GSM") {
-                    gsmCmLookup?.invoke(cell.tac, cell.cellId?.toInt(), sim.mcc, sim.mnc)
-                } else null
-                SimScreen(
-                    sim = sim,
-                    location = location,
-                    cmExportCell = cmCell,
-                    cmExportLoaded = cmExportLoaded,
-                    cmNeighborLookup = cmNeighborLookup,
-                    wcdmaCmCell = wcdmaCell,
-                    wcdmaCmLoaded = wcdmaCmLoaded,
-                    gsmCmCell = gsmCell,
-                    gsmCmLoaded = gsmCmLoaded,
-                )
             }
         }
     }

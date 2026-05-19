@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Intent
 import android.net.TrafficStats
 import android.net.Uri
+import android.os.Build
+import android.telephony.SubscriptionManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.netview.app.data.CmExportCell
@@ -17,7 +19,10 @@ import com.netview.app.data.SimSlotData
 import com.netview.app.data.TelephonyRepository
 import com.netview.app.data.WcdmaCmCell
 import com.netview.app.data.WcdmaCmRepository
+import com.netview.app.data.WifiRepository
+import com.netview.app.data.WifiState
 import com.netview.app.utils.DebugLog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +33,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.InetSocketAddress
+import java.net.Socket
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -37,12 +45,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val cmExportRepo = CmExportRepository()
     private val wcdmaCmRepo = WcdmaCmRepository()
     private val gsmCmRepo = GsmCmRepository()
+    private val wifiRepo = WifiRepository(app)
 
     private val _sims = MutableStateFlow<List<SimSlotData>>(emptyList())
     val sims: StateFlow<List<SimSlotData>> = _sims.asStateFlow()
 
     private val _location = MutableStateFlow<LocationData?>(null)
     val location: StateFlow<LocationData?> = _location.asStateFlow()
+
+    private val _wifiState = MutableStateFlow<WifiState?>(null)
+    val wifiState: StateFlow<WifiState?> = _wifiState.asStateFlow()
 
     private val _permissionsGranted = MutableStateFlow(false)
     val permissionsGranted: StateFlow<Boolean> = _permissionsGranted.asStateFlow()
@@ -76,6 +88,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // Throughput tracking
     private data class TrafficSnapshot(val rxBytes: Long, val txBytes: Long, val timeMs: Long)
     private var lastTraffic: TrafficSnapshot? = null
+
+    // Latency ping — runs every 4th refresh on IO thread, result persisted here
+    private var refreshCount = 0
+    private val _latencyMs = MutableStateFlow<Long?>(null)
 
     // Cell time tracking: slotIndex → (cellKey, startTimeMs)
     private val cellKeyMap = mutableMapOf<Int, String>()
@@ -134,6 +150,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!telephonyRepo.hasPermissions()) return
         val rawSims = telephonyRepo.readAllSims()
         _location.value = locationRepo.current()
+        _wifiState.value = wifiRepo.read().let { if (it.isEnabled) it else null }
 
         val now = System.currentTimeMillis()
 
@@ -149,13 +166,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (dtSec > 0) {
                     dlMbps = (rxBytes - prev.rxBytes) * 8.0 / 1_000_000.0 / dtSec
                     ulMbps = (txBytes - prev.txBytes) * 8.0 / 1_000_000.0 / dtSec
-                    // Clamp negatives (counter reset after reboot)
                     if (dlMbps!! < 0) dlMbps = 0.0
                     if (ulMbps!! < 0) ulMbps = 0.0
                 }
             }
             lastTraffic = TrafficSnapshot(rxBytes, txBytes, now)
         }
+
+        // Ping latency — TCP connect to 8.8.8.8:53, every 4th refresh
+        refreshCount++
+        if (refreshCount % 4 == 0) {
+            viewModelScope.launch(Dispatchers.IO) {
+                _latencyMs.value = measureLatencyMs()
+            }
+        }
+
+        // TrafficStats is device-wide — only credit the active data SIM
+        val defaultDataSubId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            SubscriptionManager.getDefaultDataSubscriptionId()
+        else SubscriptionManager.INVALID_SUBSCRIPTION_ID
 
         // Cell time tracking + enrich sims
         _sims.value = rawSims.map { sim ->
@@ -166,13 +195,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 cellStartMap[idx] = now
             }
             val elapsed = if (key != null) (now - (cellStartMap[idx] ?: now)) / 1000L else null
+            val isDataSim = defaultDataSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                || sim.subId == defaultDataSubId
             sim.copy(
-                dlThroughputMbps = dlMbps,
-                ulThroughputMbps = ulMbps,
+                dlThroughputMbps = if (isDataSim) dlMbps else null,
+                ulThroughputMbps = if (isDataSim) ulMbps else null,
+                latencyMs = if (isDataSim) _latencyMs.value else null,
                 timeOnCellSeconds = elapsed,
             )
         }
     }
+
+    private fun measureLatencyMs(): Long? = try {
+        val start = System.currentTimeMillis()
+        Socket().use { it.connect(InetSocketAddress("8.8.8.8", 53), 3000) }
+        System.currentTimeMillis() - start
+    } catch (_: Exception) { null }
 
     private fun cellKey(sim: SimSlotData): String? {
         val c = sim.servingCell ?: return null

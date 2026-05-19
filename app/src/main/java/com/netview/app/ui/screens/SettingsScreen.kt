@@ -131,7 +131,7 @@ fun SettingsScreen(
                     Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     Text("NetView — Cell Info Viewer", style = MaterialTheme.typography.bodyMedium)
-                    Text("Version 1.1.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Version 3.0.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "Shows serving-cell parameters (PCI, EARFCN, RSRP, RSRQ, SINR…) " +

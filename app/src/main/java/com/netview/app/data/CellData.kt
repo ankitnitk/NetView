@@ -23,6 +23,7 @@ data class SimSlotData(
     val interRatNeighborCells: List<NeighborCell> = emptyList(),
     val dlThroughputMbps: Double? = null,
     val ulThroughputMbps: Double? = null,
+    val latencyMs: Long? = null,
     val timeOnCellSeconds: Long? = null,
 )
 

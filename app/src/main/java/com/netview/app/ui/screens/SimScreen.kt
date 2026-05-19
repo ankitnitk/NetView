@@ -154,6 +154,7 @@ fun SimScreen(
             // Throughput and cell time (all RATs)
             sim.dlThroughputMbps?.let { rows += "DL Speed" to formatMbps(it) }
             sim.ulThroughputMbps?.let { rows += "UL Speed" to formatMbps(it) }
+            sim.latencyMs?.let { rows += "Latency" to "$it ms" }
             sim.timeOnCellSeconds?.let { rows += "Time on Cell" to formatDuration(it) }
 
             InfoCard(title = "Serving Cell", rows = rows)
@@ -275,7 +276,6 @@ fun SimScreen(
                     "LNHOIF List" to (m.lnhoifList ?: "—"),
                     "CAPR List" to (m.caprList ?: "—"),
                     "LNCEL Count" to (m.lncelCount?.toString() ?: "—"),
-                    "Band Count" to (m.bandCount?.toString() ?: "—"),
                     "Band List" to (m.bandList ?: "—"),
                     "LTE Mode" to (m.lteMode ?: "—")
                 )

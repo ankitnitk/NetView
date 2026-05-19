@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
         val nav = rememberNavController()
         val sims by viewModel.sims.collectAsState()
         val location by viewModel.location.collectAsState()
+        val wifiState by viewModel.wifiState.collectAsState()
         val permissionsGranted by viewModel.permissionsGranted.collectAsState()
         val refresh by viewModel.refreshSecondsFlow.collectAsState(initial = SettingsRepository.DEFAULT_REFRESH)
         val debugLogging by viewModel.debugLoggingEnabledFlow.collectAsState(initial = false)
@@ -117,6 +118,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.lookupGsmCmExport(lac, cellId, mcc, mnc)
                     },
                     gsmCmLoaded = gsmCmExportLoaded,
+                    wifiState = wifiState,
                 )
             }
             composable("settings") {

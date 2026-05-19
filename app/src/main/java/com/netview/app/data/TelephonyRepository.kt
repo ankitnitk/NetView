@@ -137,8 +137,9 @@ class TelephonyRepository(private val context: Context) {
             (hasNrCell || hasNrSignal || hasNrFromSs) && dataType == TelephonyManager.NETWORK_TYPE_LTE -> "5G NSA"
             else -> Formatters.radioMode(dataType, serviceState)
         }
-        // Build NR leg display: prefer full CellInfoNr if available, else synthesize from SignalStrength
-        val nrCellDisplay: ServingCellInfo? = when {
+        // Build NR leg display — gated on networkType to prevent CellInfoNr from shared
+        // allCellInfo bleeding to the non-NR SIM on a DSDS device.
+        val nrCellDisplay: ServingCellInfo? = if (networkType == "5G NSA" || networkType == "5G SA") when {
             nrCellInfo != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> parseNr(nrCellInfo)
             nrSignal != null -> ServingCellInfo(
                 rat = "NR", mcc = null, mnc = null, pci = null, tac = null, cellId = null,
@@ -156,7 +157,7 @@ class TelephonyRepository(private val context: Context) {
                 timingAdvance = null, bsic = null, ber = null
             )
             else -> null
-        }
+        } else null
 
         val volte = isVolteRegistered(tm)
         val vonr = isVonrRegistered(serviceState)
