@@ -1,4 +1,4 @@
-name: Build NetView APK
+name: Build NetView
 
 on:
   push:
@@ -37,8 +37,17 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build Release APK (signed with debug key for sideload)
-        run: ./gradlew assembleRelease --no-daemon
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > $RUNNER_TEMP/netview-release.jks
+
+      - name: Build signed AAB (Play Store) + APK (sideload)
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/netview-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew bundleRelease assembleRelease --no-daemon
 
       - name: Read version
         id: ver
@@ -46,12 +55,20 @@ jobs:
           v=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
           echo "name=$v" >> "$GITHUB_OUTPUT"
 
-      - name: Rename APK
+      - name: Collect outputs
         run: |
           mkdir -p out
+          cp app/build/outputs/bundle/release/app-release.aab "out/NetView-v${{ steps.ver.outputs.name }}.aab"
           cp app/build/outputs/apk/release/app-release.apk "out/NetView-v${{ steps.ver.outputs.name }}.apk"
 
-      - name: Upload APK artifact (keeps a CI download for 30 days)
+      - name: Upload AAB artifact (Play Store upload)
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetView-AAB
+          path: "out/NetView-v${{ steps.ver.outputs.name }}.aab"
+          retention-days: 30
+
+      - name: Upload APK artifact (sideload)
         uses: actions/upload-artifact@v4
         with:
           name: NetView-APK
@@ -69,6 +86,7 @@ jobs:
             Commit: ${{ github.sha }}
 
             Download `NetView-v${{ steps.ver.outputs.name }}.apk` below and install on your phone (allow Unknown Sources).
+            The `.aab` file in CI artifacts is for Play Store submission.
           files: "out/NetView-v${{ steps.ver.outputs.name }}.apk"
           prerelease: false
           make_latest: "true"
