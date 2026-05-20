@@ -3,7 +3,10 @@ package com.netview.app.data
 data class WifiState(
     val isEnabled: Boolean,
     val connection: WifiConnection?,
-    val nearbyAps: List<NearbyAp>
+    val nearbyAps: List<NearbyAp>,
+    val dlThroughputMbps: Double? = null,
+    val ulThroughputMbps: Double? = null,
+    val latencyMs: Long? = null,
 )
 
 data class WifiConnection(

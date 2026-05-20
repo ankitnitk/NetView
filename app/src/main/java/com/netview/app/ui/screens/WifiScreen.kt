@@ -86,6 +86,15 @@ fun WifiScreen(
                 )
             }
 
+            val perfRows = buildList {
+                wifiState.dlThroughputMbps?.let { add("DL Throughput" to "%.2f Mbps".format(it)) }
+                wifiState.ulThroughputMbps?.let { add("UL Throughput" to "%.2f Mbps".format(it)) }
+                wifiState.latencyMs?.let { add("Latency" to "$it ms") }
+            }
+            if (perfRows.isNotEmpty()) {
+                InfoCard(title = "Performance", rows = perfRows)
+            }
+
             if (wifiState.nearbyAps.isNotEmpty()) {
                 val apRows = buildList {
                     wifiState.nearbyAps.forEach { ap ->

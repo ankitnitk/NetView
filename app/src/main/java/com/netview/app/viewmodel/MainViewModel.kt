@@ -2,6 +2,8 @@ package com.netview.app.viewmodel
 
 import android.app.Application
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.TrafficStats
 import android.net.Uri
 import android.os.Build
@@ -86,7 +88,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var refreshSeconds = SettingsRepository.DEFAULT_REFRESH
 
     // Throughput tracking
-    private data class TrafficSnapshot(val rxBytes: Long, val txBytes: Long, val timeMs: Long)
+    private data class TrafficSnapshot(val rxBytes: Long, val txBytes: Long, val timeMs: Long, val isWifi: Boolean)
     private var lastTraffic: TrafficSnapshot? = null
 
     // Latency ping — runs every 4th refresh on IO thread, result persisted here
@@ -150,27 +152,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!telephonyRepo.hasPermissions()) return
         val rawSims = telephonyRepo.readAllSims()
         _location.value = locationRepo.current()
-        _wifiState.value = wifiRepo.read().let { if (it.isEnabled) it else null }
 
         val now = System.currentTimeMillis()
+        val wifiIsDataTransport = isWifiDataActive()
 
-        // Throughput
-        val rxBytes = TrafficStats.getMobileRxBytes()
-        val txBytes = TrafficStats.getMobileTxBytes()
+        // Throughput — use total bytes when on WiFi, mobile bytes when on cellular
+        val rxBytes = if (wifiIsDataTransport) TrafficStats.getTotalRxBytes() else TrafficStats.getMobileRxBytes()
+        val txBytes = if (wifiIsDataTransport) TrafficStats.getTotalTxBytes() else TrafficStats.getMobileTxBytes()
         var dlMbps: Double? = null
         var ulMbps: Double? = null
         if (rxBytes >= 0 && txBytes >= 0) {
             val prev = lastTraffic
-            if (prev != null) {
+            // Reset snapshot when transport type changes to avoid bogus spike
+            if (prev != null && prev.isWifi == wifiIsDataTransport) {
                 val dtSec = (now - prev.timeMs) / 1000.0
                 if (dtSec > 0) {
-                    dlMbps = (rxBytes - prev.rxBytes) * 8.0 / 1_000_000.0 / dtSec
-                    ulMbps = (txBytes - prev.txBytes) * 8.0 / 1_000_000.0 / dtSec
-                    if (dlMbps!! < 0) dlMbps = 0.0
-                    if (ulMbps!! < 0) ulMbps = 0.0
+                    dlMbps = ((rxBytes - prev.rxBytes) * 8.0 / 1_000_000.0 / dtSec).coerceAtLeast(0.0)
+                    ulMbps = ((txBytes - prev.txBytes) * 8.0 / 1_000_000.0 / dtSec).coerceAtLeast(0.0)
                 }
             }
-            lastTraffic = TrafficSnapshot(rxBytes, txBytes, now)
+            lastTraffic = TrafficSnapshot(rxBytes, txBytes, now, wifiIsDataTransport)
         }
 
         // Ping latency — TCP connect to 8.8.8.8:53, every 4th refresh
@@ -181,7 +182,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-        // TrafficStats is device-wide — only credit the active data SIM
+        // Assign throughput + latency to WiFi tab or SIM tab depending on active transport
+        val wifiBase = wifiRepo.read().let { if (it.isEnabled) it else null }
+        _wifiState.value = wifiBase?.let {
+            if (wifiIsDataTransport)
+                it.copy(dlThroughputMbps = dlMbps, ulThroughputMbps = ulMbps, latencyMs = _latencyMs.value)
+            else
+                it
+        }
+
+        // TrafficStats is device-wide — only credit the active data SIM (when on cellular)
         val defaultDataSubId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
             SubscriptionManager.getDefaultDataSubscriptionId()
         else SubscriptionManager.INVALID_SUBSCRIPTION_ID
@@ -198,12 +208,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val isDataSim = defaultDataSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID
                 || sim.subId == defaultDataSubId
             sim.copy(
-                dlThroughputMbps = if (isDataSim) dlMbps else null,
-                ulThroughputMbps = if (isDataSim) ulMbps else null,
-                latencyMs = if (isDataSim) _latencyMs.value else null,
+                dlThroughputMbps = if (!wifiIsDataTransport && isDataSim) dlMbps else null,
+                ulThroughputMbps = if (!wifiIsDataTransport && isDataSim) ulMbps else null,
+                latencyMs = if (!wifiIsDataTransport && isDataSim) _latencyMs.value else null,
                 timeOnCellSeconds = elapsed,
             )
         }
+    }
+
+    private fun isWifiDataActive(): Boolean {
+        val cm = getApplication<Application>().getSystemService(ConnectivityManager::class.java)
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
     }
 
     private fun measureLatencyMs(): Long? = try {
