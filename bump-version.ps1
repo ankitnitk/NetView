@@ -6,11 +6,10 @@ param([Parameter(Mandatory)][string]$NewVersion)
 $file    = "$PSScriptRoot\app\build.gradle.kts"
 $content = Get-Content $file -Raw
 
-# Extract current versionCode
-$currentCode = [int]($content -match 'versionCode = (\d+)' | Out-Null; $Matches[1])
-$newCode     = $currentCode + 1
+$null    = $content -match 'versionCode = (\d+)'
+$newCode = [int]$Matches[1] + 1
 
-$content = $content -replace 'versionCode = \d+',  "versionCode = $newCode"
+$content = $content -replace 'versionCode = \d+',     "versionCode = $newCode"
 $content = $content -replace 'versionName = "[^"]+"', "versionName = `"$NewVersion`""
 
 Set-Content $file $content -NoNewline

@@ -12,8 +12,8 @@ android {
         applicationId = "com.netview.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "3.0.4"
+        versionCode = 9
+        versionName = "3.0.5"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -28,12 +28,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
         }
         debug {
             applicationIdSuffix = ".debug"
