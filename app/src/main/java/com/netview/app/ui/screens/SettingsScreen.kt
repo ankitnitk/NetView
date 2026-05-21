@@ -1,6 +1,7 @@
 package com.netview.app.ui.screens
 
 import android.net.Uri
+import com.netview.app.BuildConfig
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -131,7 +132,7 @@ fun SettingsScreen(
                     Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     Text("NetView — Cell Info Viewer", style = MaterialTheme.typography.bodyMedium)
-                    Text("Version 3.0.1", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "Shows serving-cell parameters (PCI, EARFCN, RSRP, RSRQ, SINR…) " +

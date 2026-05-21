@@ -12,8 +12,8 @@ android {
         applicationId = "com.netview.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "3.0.3"
+        versionCode = 8
+        versionName = "3.0.4"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -46,7 +46,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     }
