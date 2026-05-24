@@ -5,7 +5,6 @@ import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -21,27 +20,17 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.*
-import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.netview.app.MainActivity
 import com.netview.app.R
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class NetViewWidget : GlanceAppWidget() {
-
-    override val stateDefinition = object : GlanceStateDefinition<Preferences> {
-        override suspend fun getDataStore(context: Context, fileKey: File): DataStore<Preferences> =
-            context.widgetPrefsDataStore
-
-        override fun getLocation(context: Context, fileKey: File): File =
-            File(context.applicationContext.filesDir, "datastore/netview_widget.preferences_pb")
-    }
 
     companion object {
         val KEY_SIM_COUNT = intPreferencesKey("sim_count")

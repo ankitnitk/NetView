@@ -2,8 +2,8 @@ package com.netview.app.widget
 
 import android.content.Context
 import android.telephony.SubscriptionManager
-import androidx.datastore.preferences.core.edit
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
 import com.netview.app.data.CmExportRepository
 import com.netview.app.data.GsmCmRepository
 import com.netview.app.data.ServingCellInfo
@@ -27,29 +27,30 @@ object WidgetWriter {
         val ids = GlanceAppWidgetManager(context).getGlanceIds(NetViewWidget::class.java)
         if (ids.isEmpty()) return
 
-        context.widgetPrefsDataStore.edit { prefs ->
-            prefs[NetViewWidget.KEY_SIM_COUNT] = sims.size.coerceAtMost(2)
-            prefs[NetViewWidget.KEY_UPDATED] = updatedMs
+        for (id in ids) {
+            updateAppWidgetState(context, id) { prefs ->
+                prefs[NetViewWidget.KEY_SIM_COUNT] = sims.size.coerceAtMost(2)
+                prefs[NetViewWidget.KEY_UPDATED] = updatedMs
 
-            sims.take(2).forEachIndexed { slot, sim ->
-                val isDataSim = defaultDataSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID
-                        || sim.subId == defaultDataSubId
+                sims.take(2).forEachIndexed { slot, sim ->
+                    val isDataSim = defaultDataSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                            || sim.subId == defaultDataSubId
 
-                prefs[NetViewWidget.keyCarrier(slot)] = sim.carrierName
-                prefs[NetViewWidget.keyRat(slot)] = sim.networkType
-                prefs[NetViewWidget.keyCellLabel(slot)] = cellLabel(sim, lteExport, wcdmaExport, gsmExport)
-                prefs[NetViewWidget.keyBand(slot)] = sim.servingCell?.band ?: ""
-                prefs[NetViewWidget.keySigLine(slot)] = signalLine(sim.servingCell)
-                prefs[NetViewWidget.keyCa(slot)] =
-                    if (sim.carrierAggregation.isNotEmpty()) "${sim.carrierAggregation.size}CC" else ""
+                    prefs[NetViewWidget.keyCarrier(slot)] = sim.carrierName
+                    prefs[NetViewWidget.keyRat(slot)] = sim.networkType
+                    prefs[NetViewWidget.keyCellLabel(slot)] = cellLabel(sim, lteExport, wcdmaExport, gsmExport)
+                    prefs[NetViewWidget.keyBand(slot)] = sim.servingCell?.band ?: ""
+                    prefs[NetViewWidget.keySigLine(slot)] = signalLine(sim.servingCell)
+                    prefs[NetViewWidget.keyCa(slot)] =
+                        if (sim.carrierAggregation.isNotEmpty()) "${sim.carrierAggregation.size}CC" else ""
 
-                val showMetrics = !isWifi && isDataSim
-                prefs[NetViewWidget.keyDl(slot)] = if (showMetrics) dlMbps?.let { "DL %.1f Mbps".format(it) } ?: "" else ""
-                prefs[NetViewWidget.keyLat(slot)] = if (showMetrics) latencyMs?.let { "$it ms" } ?: "" else ""
+                    val showMetrics = !isWifi && isDataSim
+                    prefs[NetViewWidget.keyDl(slot)] = if (showMetrics) dlMbps?.let { "DL %.1f Mbps".format(it) } ?: "" else ""
+                    prefs[NetViewWidget.keyLat(slot)] = if (showMetrics) latencyMs?.let { "$it ms" } ?: "" else ""
+                }
             }
+            NetViewWidget().update(context, id)
         }
-
-        ids.forEach { id -> NetViewWidget().update(context, id) }
     }
 
     private fun cellLabel(
