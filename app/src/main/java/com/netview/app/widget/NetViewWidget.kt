@@ -2,6 +2,7 @@ package com.netview.app.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.Preferences
@@ -18,10 +19,10 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.*
-import androidx.glance.material3.GlanceTheme
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import com.netview.app.MainActivity
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -41,14 +42,18 @@ class NetViewWidget : GlanceAppWidget() {
         fun keyCa(slot: Int) = stringPreferencesKey("ca_$slot")
         fun keyDl(slot: Int) = stringPreferencesKey("dl_$slot")
         fun keyLat(slot: Int) = stringPreferencesKey("lat_$slot")
+
+        // MD3-aligned day/night colours — no glance-material3 dependency needed
+        private val colorBg      = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFF1C1B1F))
+        private val colorPrimary = ColorProvider(day = Color(0xFF6650A4), night = Color(0xFFD0BCFF))
+        private val colorOnBg    = ColorProvider(day = Color(0xFF1C1B1F), night = Color(0xFFE6E1E5))
+        private val colorSubtle  = ColorProvider(day = Color(0xFF49454F), night = Color(0xFFCAC4D0))
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             val prefs = currentState<Preferences>()
-            GlanceTheme {
-                Content(prefs)
-            }
+            Content(prefs)
         }
     }
 
@@ -58,14 +63,14 @@ class NetViewWidget : GlanceAppWidget() {
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(GlanceTheme.colors.widgetBackground)
+                .background(colorBg)
                 .clickable(actionStartActivity<MainActivity>())
         ) {
             Column(modifier = GlanceModifier.fillMaxSize().padding(8.dp)) {
                 if (simCount == 0) {
                     Text(
                         "No data — open NetView",
-                        style = TextStyle(color = GlanceTheme.colors.onBackground, fontSize = 12.sp)
+                        style = TextStyle(color = colorOnBg, fontSize = 12.sp)
                     )
                 } else {
                     for (slot in 0 until simCount) {
@@ -91,52 +96,44 @@ class NetViewWidget : GlanceAppWidget() {
         val lat     = prefs[keyLat(slot)] ?: ""
 
         Column(modifier = GlanceModifier.fillMaxWidth()) {
-            // Carrier  RAT  Band
             Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     carrier,
-                    style = TextStyle(
-                        color = GlanceTheme.colors.onBackground,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    ),
+                    style = TextStyle(color = colorOnBg, fontWeight = FontWeight.Bold, fontSize = 12.sp),
                     modifier = GlanceModifier.defaultWeight()
                 )
                 if (rat.isNotEmpty()) {
-                    Text(rat, style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 11.sp))
+                    Text(rat, style = TextStyle(color = colorPrimary, fontSize = 11.sp))
                 }
                 if (band.isNotEmpty()) {
-                    Text("  $band", style = TextStyle(color = GlanceTheme.colors.onBackground, fontSize = 11.sp))
+                    Text("  $band", style = TextStyle(color = colorOnBg, fontSize = 11.sp))
                 }
             }
-            // Cell label  CA
             if (cell.isNotEmpty() || ca.isNotEmpty()) {
                 Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         cell,
-                        style = TextStyle(color = GlanceTheme.colors.onBackground, fontSize = 11.sp),
+                        style = TextStyle(color = colorOnBg, fontSize = 11.sp),
                         modifier = GlanceModifier.defaultWeight()
                     )
                     if (ca.isNotEmpty()) {
-                        Text("CA $ca", style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 10.sp))
+                        Text("CA $ca", style = TextStyle(color = colorPrimary, fontSize = 10.sp))
                     }
                 }
             }
-            // Signal summary
             if (sig.isNotEmpty()) {
-                Text(sig, style = TextStyle(color = GlanceTheme.colors.onBackground, fontSize = 10.sp))
+                Text(sig, style = TextStyle(color = colorOnBg, fontSize = 10.sp))
             }
-            // Throughput / latency (background monitoring only)
             if (dl.isNotEmpty() || lat.isNotEmpty()) {
                 Row {
                     if (dl.isNotEmpty()) {
-                        Text(dl, style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 10.sp))
+                        Text(dl, style = TextStyle(color = colorPrimary, fontSize = 10.sp))
                     }
                     if (dl.isNotEmpty() && lat.isNotEmpty()) {
-                        Text("  ", style = TextStyle(color = GlanceTheme.colors.onBackground, fontSize = 10.sp))
+                        Text("  ", style = TextStyle(color = colorOnBg, fontSize = 10.sp))
                     }
                     if (lat.isNotEmpty()) {
-                        Text(lat, style = TextStyle(color = GlanceTheme.colors.onBackground, fontSize = 10.sp))
+                        Text(lat, style = TextStyle(color = colorOnBg, fontSize = 10.sp))
                     }
                 }
             }
@@ -150,13 +147,13 @@ class NetViewWidget : GlanceAppWidget() {
             if (updatedMs > 0L) {
                 Text(
                     SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(updatedMs)),
-                    style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 9.sp)
+                    style = TextStyle(color = colorSubtle, fontSize = 9.sp)
                 )
             }
             Spacer(GlanceModifier.defaultWeight())
             Text(
                 "↻",
-                style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 16.sp),
+                style = TextStyle(color = colorPrimary, fontSize = 16.sp),
                 modifier = GlanceModifier.clickable(actionRunCallback<WidgetRefreshCallback>())
             )
         }
