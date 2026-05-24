@@ -92,15 +92,29 @@ class TelephonyRepository(private val context: Context) {
         // on a single-modem device. Prefer per-SIM ServiceState.NetworkRegistrationInfo cellIdentity;
         // fall back to allCellInfo only when the SS path yields nothing.
         val serving0 = parseServingFromServiceState(tm, serviceState) ?: parseServingCell(cellInfos)
+        // Samsung intermittently returns UNAVAILABLE for CellIdentityLte.ci in the ServiceState
+        // path. The allCellInfo path uses a different modem code path and often has CI when SS
+        // doesn't. Patch it in so eNB/LCR (and CMExport lookups) work reliably.
+        val serving0Patched = if (serving0?.rat == "LTE" && serving0.cellId == null) {
+            val cid = cellInfos.filterIsInstance<CellInfoLte>()
+                .firstOrNull { it.isRegistered }
+                ?.cellIdentity?.ci?.toLong()
+                ?.takeIf { it > 0 && it != CellInfo.UNAVAILABLE.toLong() }
+            if (cid != null) serving0.copy(
+                cellId = cid,
+                enbId = Formatters.lteEnbId(cid),
+                sectorId = Formatters.lteSectorId(cid)
+            ) else serving0
+        } else serving0
         // TA from SignalStrength.cellSignalStrengths is unreliable on Samsung — the modem only
         // populates it in the CellInfoLte path. Patch it in when the SS path leaves it null.
-        val serving = if (serving0 != null && serving0.rat == "LTE" && serving0.timingAdvance == null) {
+        val serving = if (serving0Patched != null && serving0Patched.rat == "LTE" && serving0Patched.timingAdvance == null) {
             val ta = cellInfos.filterIsInstance<CellInfoLte>()
                 .firstOrNull { it.isRegistered }
                 ?.cellSignalStrength?.timingAdvance
                 ?.takeIf { it != CellInfo.UNAVAILABLE }
-            ta?.let { serving0.copy(timingAdvance = it) } ?: serving0
-        } else serving0
+            ta?.let { serving0Patched.copy(timingAdvance = it) } ?: serving0Patched
+        } else serving0Patched
         val ssObj = try { tm.signalStrength } catch (e: Exception) { null }
         val signalStrengths = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)

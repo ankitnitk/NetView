@@ -76,7 +76,15 @@ object WidgetWriter {
                 val name = if (lteExport != null && enbId != null && sectorId != null)
                     lteExport.lookup(enbId, sectorId, c.mcc?.toIntOrNull(), c.mnc?.toIntOrNull())?.lncelName
                 else null
-                name ?: "eNB ${c.enbId ?: "—"} / LCR ${c.sectorId ?: "—"}"
+                when {
+                    name != null -> name
+                    enbId != null && sectorId != null -> "eNB $enbId / LCR $sectorId"
+                    else -> buildString {
+                        // CI unavailable — show physical cell identifiers as fallback
+                        c.pci?.let { append("PCI $it") }
+                        c.earfcn?.let { if (isNotEmpty()) append("  "); append("EARFCN $it") }
+                    }.ifBlank { "LTE" }
+                }
             }
             "NR" -> "gNB ${c.gnbId ?: "—"}"
             "WCDMA" -> {

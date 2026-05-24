@@ -33,17 +33,17 @@ class NetViewWidget : GlanceAppWidget() {
         val KEY_SIM_COUNT = intPreferencesKey("sim_count")
         val KEY_UPDATED   = longPreferencesKey("updated_ms")
 
-        fun keySim(slot: Int)     = stringPreferencesKey("sim_$slot")
-        fun keyCarrier(slot: Int) = stringPreferencesKey("carrier_$slot")
-        fun keyRat(slot: Int)     = stringPreferencesKey("rat_$slot")
+        fun keySim(slot: Int)       = stringPreferencesKey("sim_$slot")
+        fun keyCarrier(slot: Int)   = stringPreferencesKey("carrier_$slot")
+        fun keyRat(slot: Int)       = stringPreferencesKey("rat_$slot")
         fun keyCellLabel(slot: Int) = stringPreferencesKey("cell_$slot")
-        fun keyBand(slot: Int)    = stringPreferencesKey("band_$slot")
-        fun keySigLine(slot: Int) = stringPreferencesKey("sig_$slot")
-        fun keyCa(slot: Int)      = stringPreferencesKey("ca_$slot")
-        fun keyDl(slot: Int)      = stringPreferencesKey("dl_$slot")
-        fun keyLat(slot: Int)     = stringPreferencesKey("lat_$slot")
-        fun keyNrRow(slot: Int)   = stringPreferencesKey("nr_row_$slot")
-        fun keyNrSig(slot: Int)   = stringPreferencesKey("nr_sig_$slot")
+        fun keyBand(slot: Int)      = stringPreferencesKey("band_$slot")
+        fun keySigLine(slot: Int)   = stringPreferencesKey("sig_$slot")
+        fun keyCa(slot: Int)        = stringPreferencesKey("ca_$slot")
+        fun keyDl(slot: Int)        = stringPreferencesKey("dl_$slot")
+        fun keyLat(slot: Int)       = stringPreferencesKey("lat_$slot")
+        fun keyNrRow(slot: Int)     = stringPreferencesKey("nr_row_$slot")
+        fun keyNrSig(slot: Int)     = stringPreferencesKey("nr_sig_$slot")
 
         // Resource-based day/night colours (values/colors.xml + values-night/colors.xml)
         private val colorBg      = ColorProvider(R.color.widget_bg)
@@ -63,14 +63,22 @@ class NetViewWidget : GlanceAppWidget() {
     private fun Content(prefs: Preferences) {
         val simCount = (prefs[KEY_SIM_COUNT] ?: 0).coerceAtMost(2)
         val context = LocalContext.current
+
+        // Box fills the whole widget area (makes the entire area tappable to open the app).
+        // Column has background + wraps to content height so there's no empty dark space
+        // below the content when the widget is placed in a larger cell area.
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(colorBg)
                 .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
         ) {
-            Column(modifier = GlanceModifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 6.dp)) {
-                // Header row
+            Column(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .background(colorBg)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                // Header
                 Row(
                     modifier = GlanceModifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -96,6 +104,7 @@ class NetViewWidget : GlanceAppWidget() {
                 } else {
                     for (slot in 0 until simCount) {
                         if (slot > 0) {
+                            Spacer(GlanceModifier.fillMaxWidth().height(4.dp))
                             Spacer(GlanceModifier.fillMaxWidth().height(1.dp).background(colorSubtle))
                             Spacer(GlanceModifier.fillMaxWidth().height(4.dp))
                         }
@@ -121,7 +130,7 @@ class NetViewWidget : GlanceAppWidget() {
         val nrSig    = prefs[keyNrSig(slot)] ?: ""
 
         Column(modifier = GlanceModifier.fillMaxWidth()) {
-            // Row 1: SIM label · carrier name  |  RAT  band
+            // Row 1: SIM label · carrier  |  RAT  band
             Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "$simLabel · $carrier",
@@ -135,7 +144,7 @@ class NetViewWidget : GlanceAppWidget() {
                     Text("  $band", style = TextStyle(color = colorSubtle, fontSize = 10.sp))
                 }
             }
-            // Row 2: cell label  |  CA
+            // Row 2: cell/site name  |  CA
             if (cell.isNotEmpty() || ca.isNotEmpty()) {
                 Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -148,11 +157,11 @@ class NetViewWidget : GlanceAppWidget() {
                     }
                 }
             }
-            // Row 3: LTE/primary signal
+            // Row 3: signal
             if (sig.isNotEmpty()) {
                 Text(sig, style = TextStyle(color = colorOnBg, fontSize = 10.sp))
             }
-            // Row 4: NR secondary cell (NSA mode)
+            // Row 4: NR secondary cell (NSA)
             if (nrRow.isNotEmpty() || nrSig.isNotEmpty()) {
                 Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     if (nrRow.isNotEmpty()) {
@@ -167,7 +176,7 @@ class NetViewWidget : GlanceAppWidget() {
                     }
                 }
             }
-            // Row 5: DL speed + latency
+            // Row 5: DL + latency
             if (dl.isNotEmpty() || lat.isNotEmpty()) {
                 Row {
                     if (dl.isNotEmpty()) {
