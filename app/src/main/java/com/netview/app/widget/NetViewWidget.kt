@@ -1,6 +1,7 @@
 package com.netview.app.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -12,6 +13,7 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.LocalContext
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
@@ -60,11 +62,12 @@ class NetViewWidget : GlanceAppWidget() {
     @Composable
     private fun Content(prefs: Preferences) {
         val simCount = (prefs[KEY_SIM_COUNT] ?: 0).coerceAtMost(2)
+        val context = LocalContext.current
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(colorBg)
-                .clickable(actionStartActivity<MainActivity>())
+                .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
         ) {
             Column(modifier = GlanceModifier.fillMaxSize().padding(8.dp)) {
                 if (simCount == 0) {

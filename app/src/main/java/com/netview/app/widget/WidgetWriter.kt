@@ -2,8 +2,9 @@ package com.netview.app.widget
 
 import android.content.Context
 import android.telephony.SubscriptionManager
+import androidx.datastore.preferences.core.toMutablePreferences
 import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.state.PreferencesGlanceStateDefinition
+import androidx.glance.appwidget.PreferencesGlanceStateDefinition
 import androidx.glance.appwidget.state.updateAppWidgetState
 import com.netview.app.data.CmExportRepository
 import com.netview.app.data.GsmCmRepository
