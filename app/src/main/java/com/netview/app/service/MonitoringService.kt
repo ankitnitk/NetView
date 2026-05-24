@@ -49,6 +49,7 @@ class MonitoringService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 2001
         const val CHANNEL_ID = "netview_monitoring"
+        const val ACTION_REFRESH_NOW = "com.netview.app.action.REFRESH_NOW"
 
         fun start(context: Context) {
             val intent = Intent(context, MonitoringService::class.java)
@@ -61,6 +62,17 @@ class MonitoringService : Service() {
 
         fun stop(context: Context) {
             context.stopService(Intent(context, MonitoringService::class.java))
+        }
+
+        fun refreshNow(context: Context) {
+            val intent = Intent(context, MonitoringService::class.java).apply {
+                action = ACTION_REFRESH_NOW
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         }
     }
 
@@ -79,7 +91,12 @@ class MonitoringService : Service() {
         startMonitoringLoop()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_REFRESH_NOW) {
+            scope.launch { if (telephonyRepo.hasPermissions()) runRefresh() }
+        }
+        return START_STICKY
+    }
 
     override fun onBind(intent: Intent?) = null
 
