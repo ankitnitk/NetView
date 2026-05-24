@@ -36,6 +36,7 @@ object WidgetWriter {
                     val isDataSim = defaultDataSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID
                             || sim.subId == defaultDataSubId
 
+                    prefs[NetViewWidget.keySim(slot)] = "SIM ${sim.slotIndex + 1}"
                     prefs[NetViewWidget.keyCarrier(slot)] = sim.carrierName
                     prefs[NetViewWidget.keyRat(slot)] = sim.networkType
                     prefs[NetViewWidget.keyCellLabel(slot)] = cellLabel(sim, lteExport, wcdmaExport, gsmExport)
@@ -43,6 +44,14 @@ object WidgetWriter {
                     prefs[NetViewWidget.keySigLine(slot)] = signalLine(sim.servingCell)
                     prefs[NetViewWidget.keyCa(slot)] =
                         if (sim.carrierAggregation.isNotEmpty()) "${sim.carrierAggregation.size}CC" else ""
+
+                    // NR secondary cell (NSA mode)
+                    val nr = sim.nrCell
+                    prefs[NetViewWidget.keyNrRow(slot)] = if (nr != null) buildString {
+                        nr.band?.let { append(it) }
+                        nr.gnbId?.let { if (isNotEmpty()) append(" · "); append("gNB $it") }
+                    } else ""
+                    prefs[NetViewWidget.keyNrSig(slot)] = signalLine(nr)
 
                     val showMetrics = !isWifi && isDataSim
                     prefs[NetViewWidget.keyDl(slot)] = if (showMetrics) dlMbps?.let { "DL %.1f Mbps".format(it) } ?: "" else ""

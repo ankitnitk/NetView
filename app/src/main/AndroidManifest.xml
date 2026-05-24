@@ -52,6 +52,15 @@
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
+        <activity
+            android:name=".widget.NetViewWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.NetView">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".widget.NetViewWidgetReceiver"
             android:exported="true">

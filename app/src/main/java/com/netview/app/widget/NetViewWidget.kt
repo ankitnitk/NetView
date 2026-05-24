@@ -26,24 +26,24 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.netview.app.MainActivity
 import com.netview.app.R
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class NetViewWidget : GlanceAppWidget() {
 
     companion object {
         val KEY_SIM_COUNT = intPreferencesKey("sim_count")
-        val KEY_UPDATED = longPreferencesKey("updated_ms")
+        val KEY_UPDATED   = longPreferencesKey("updated_ms")
 
+        fun keySim(slot: Int)     = stringPreferencesKey("sim_$slot")
         fun keyCarrier(slot: Int) = stringPreferencesKey("carrier_$slot")
-        fun keyRat(slot: Int) = stringPreferencesKey("rat_$slot")
+        fun keyRat(slot: Int)     = stringPreferencesKey("rat_$slot")
         fun keyCellLabel(slot: Int) = stringPreferencesKey("cell_$slot")
-        fun keyBand(slot: Int) = stringPreferencesKey("band_$slot")
+        fun keyBand(slot: Int)    = stringPreferencesKey("band_$slot")
         fun keySigLine(slot: Int) = stringPreferencesKey("sig_$slot")
-        fun keyCa(slot: Int) = stringPreferencesKey("ca_$slot")
-        fun keyDl(slot: Int) = stringPreferencesKey("dl_$slot")
-        fun keyLat(slot: Int) = stringPreferencesKey("lat_$slot")
+        fun keyCa(slot: Int)      = stringPreferencesKey("ca_$slot")
+        fun keyDl(slot: Int)      = stringPreferencesKey("dl_$slot")
+        fun keyLat(slot: Int)     = stringPreferencesKey("lat_$slot")
+        fun keyNrRow(slot: Int)   = stringPreferencesKey("nr_row_$slot")
+        fun keyNrSig(slot: Int)   = stringPreferencesKey("nr_sig_$slot")
 
         // Resource-based day/night colours (values/colors.xml + values-night/colors.xml)
         private val colorBg      = ColorProvider(R.color.widget_bg)
@@ -69,54 +69,78 @@ class NetViewWidget : GlanceAppWidget() {
                 .background(colorBg)
                 .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
         ) {
-            Column(modifier = GlanceModifier.fillMaxSize().padding(8.dp)) {
+            Column(modifier = GlanceModifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 6.dp)) {
+                // Header row
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "NetView",
+                        style = TextStyle(color = colorPrimary, fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                        modifier = GlanceModifier.defaultWeight()
+                    )
+                    Text(
+                        "↻",
+                        style = TextStyle(color = colorPrimary, fontSize = 14.sp),
+                        modifier = GlanceModifier.clickable(actionRunCallback<WidgetRefreshCallback>())
+                    )
+                }
+                Spacer(GlanceModifier.fillMaxWidth().height(4.dp))
+
                 if (simCount == 0) {
                     Text(
                         "No data — open NetView",
-                        style = TextStyle(color = colorOnBg, fontSize = 12.sp)
+                        style = TextStyle(color = colorSubtle, fontSize = 11.sp)
                     )
                 } else {
                     for (slot in 0 until simCount) {
-                        if (slot > 0) Spacer(GlanceModifier.fillMaxWidth().height(6.dp))
+                        if (slot > 0) {
+                            Spacer(GlanceModifier.fillMaxWidth().height(1.dp).background(colorSubtle))
+                            Spacer(GlanceModifier.fillMaxWidth().height(4.dp))
+                        }
                         SimBlock(prefs, slot)
                     }
                 }
-                Spacer(GlanceModifier.defaultWeight())
-                Footer(prefs)
             }
         }
     }
 
     @Composable
     private fun SimBlock(prefs: Preferences, slot: Int) {
-        val carrier = prefs[keyCarrier(slot)] ?: ""
-        val rat     = prefs[keyRat(slot)] ?: ""
-        val cell    = prefs[keyCellLabel(slot)] ?: ""
-        val band    = prefs[keyBand(slot)] ?: ""
-        val sig     = prefs[keySigLine(slot)] ?: ""
-        val ca      = prefs[keyCa(slot)] ?: ""
-        val dl      = prefs[keyDl(slot)] ?: ""
-        val lat     = prefs[keyLat(slot)] ?: ""
+        val simLabel = prefs[keySim(slot)] ?: "SIM ${slot + 1}"
+        val carrier  = prefs[keyCarrier(slot)] ?: ""
+        val rat      = prefs[keyRat(slot)] ?: ""
+        val cell     = prefs[keyCellLabel(slot)] ?: ""
+        val band     = prefs[keyBand(slot)] ?: ""
+        val sig      = prefs[keySigLine(slot)] ?: ""
+        val ca       = prefs[keyCa(slot)] ?: ""
+        val dl       = prefs[keyDl(slot)] ?: ""
+        val lat      = prefs[keyLat(slot)] ?: ""
+        val nrRow    = prefs[keyNrRow(slot)] ?: ""
+        val nrSig    = prefs[keyNrSig(slot)] ?: ""
 
         Column(modifier = GlanceModifier.fillMaxWidth()) {
+            // Row 1: SIM label · carrier name  |  RAT  band
             Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    carrier,
-                    style = TextStyle(color = colorOnBg, fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                    "$simLabel · $carrier",
+                    style = TextStyle(color = colorOnBg, fontWeight = FontWeight.Bold, fontSize = 11.sp),
                     modifier = GlanceModifier.defaultWeight()
                 )
                 if (rat.isNotEmpty()) {
-                    Text(rat, style = TextStyle(color = colorPrimary, fontSize = 11.sp))
+                    Text(rat, style = TextStyle(color = colorPrimary, fontSize = 10.sp))
                 }
                 if (band.isNotEmpty()) {
-                    Text("  $band", style = TextStyle(color = colorOnBg, fontSize = 11.sp))
+                    Text("  $band", style = TextStyle(color = colorSubtle, fontSize = 10.sp))
                 }
             }
+            // Row 2: cell label  |  CA
             if (cell.isNotEmpty() || ca.isNotEmpty()) {
                 Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         cell,
-                        style = TextStyle(color = colorOnBg, fontSize = 11.sp),
+                        style = TextStyle(color = colorOnBg, fontSize = 10.sp),
                         modifier = GlanceModifier.defaultWeight()
                     )
                     if (ca.isNotEmpty()) {
@@ -124,9 +148,26 @@ class NetViewWidget : GlanceAppWidget() {
                     }
                 }
             }
+            // Row 3: LTE/primary signal
             if (sig.isNotEmpty()) {
                 Text(sig, style = TextStyle(color = colorOnBg, fontSize = 10.sp))
             }
+            // Row 4: NR secondary cell (NSA mode)
+            if (nrRow.isNotEmpty() || nrSig.isNotEmpty()) {
+                Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (nrRow.isNotEmpty()) {
+                        Text(
+                            nrRow,
+                            style = TextStyle(color = colorOnBg, fontSize = 10.sp),
+                            modifier = GlanceModifier.defaultWeight()
+                        )
+                    }
+                    if (nrSig.isNotEmpty()) {
+                        Text(nrSig, style = TextStyle(color = colorPrimary, fontSize = 10.sp))
+                    }
+                }
+            }
+            // Row 5: DL speed + latency
             if (dl.isNotEmpty() || lat.isNotEmpty()) {
                 Row {
                     if (dl.isNotEmpty()) {
@@ -140,25 +181,6 @@ class NetViewWidget : GlanceAppWidget() {
                     }
                 }
             }
-        }
-    }
-
-    @Composable
-    private fun Footer(prefs: Preferences) {
-        val updatedMs = prefs[KEY_UPDATED] ?: 0L
-        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            if (updatedMs > 0L) {
-                Text(
-                    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(updatedMs)),
-                    style = TextStyle(color = colorSubtle, fontSize = 9.sp)
-                )
-            }
-            Spacer(GlanceModifier.defaultWeight())
-            Text(
-                "↻",
-                style = TextStyle(color = colorPrimary, fontSize = 16.sp),
-                modifier = GlanceModifier.clickable(actionRunCallback<WidgetRefreshCallback>())
-            )
         }
     }
 }
