@@ -23,6 +23,7 @@ import com.netview.app.data.WcdmaCmCell
 import com.netview.app.data.WcdmaCmRepository
 import com.netview.app.data.WifiRepository
 import com.netview.app.data.WifiState
+import com.netview.app.service.MonitoringService
 import com.netview.app.utils.DebugLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -84,6 +85,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val refreshSecondsFlow = settingsRepo.refreshSeconds
     val debugLoggingEnabledFlow = settingsRepo.debugLoggingEnabled
+    val widgetRefreshSecondsFlow = settingsRepo.widgetRefreshSeconds
+    val backgroundMonitoringFlow = settingsRepo.backgroundMonitoringEnabled
 
     private var refreshSeconds = SettingsRepository.DEFAULT_REFRESH
 
@@ -117,6 +120,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             telephonyRepo.caFlow.collect { if (telephonyRepo.hasPermissions()) refresh() }
+        }
+        // Auto-start monitoring service if it was previously enabled
+        viewModelScope.launch {
+            if (settingsRepo.backgroundMonitoringEnabled.first()) {
+                MonitoringService.start(app)
+            }
         }
         // Reload saved CMExport files on startup
         viewModelScope.launch {
@@ -241,6 +250,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setRefreshSeconds(seconds: Int) {
         viewModelScope.launch { settingsRepo.setRefreshSeconds(seconds) }
+    }
+
+    fun setWidgetRefreshSeconds(seconds: Int) {
+        viewModelScope.launch { settingsRepo.setWidgetRefreshSeconds(seconds) }
+    }
+
+    fun setBackgroundMonitoringEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setBackgroundMonitoringEnabled(enabled) }
+        val context = getApplication<Application>()
+        if (enabled) MonitoringService.start(context) else MonitoringService.stop(context)
     }
 
     fun setDebugLoggingEnabled(enabled: Boolean) {

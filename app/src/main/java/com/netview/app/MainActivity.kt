@@ -83,6 +83,8 @@ class MainActivity : ComponentActivity() {
         val permissionsGranted by viewModel.permissionsGranted.collectAsState()
         val refresh by viewModel.refreshSecondsFlow.collectAsState(initial = SettingsRepository.DEFAULT_REFRESH)
         val debugLogging by viewModel.debugLoggingEnabledFlow.collectAsState(initial = false)
+        val widgetRefresh by viewModel.widgetRefreshSecondsFlow.collectAsState(initial = SettingsRepository.DEFAULT_WIDGET_REFRESH)
+        val backgroundMonitoring by viewModel.backgroundMonitoringFlow.collectAsState(initial = false)
         val cmExportStatus by viewModel.cmExportStatus.collectAsState()
         val cmExportLoaded by viewModel.cmExportLoaded.collectAsState()
         val wcdmaCmExportStatus by viewModel.wcdmaCmExportStatus.collectAsState()
@@ -139,6 +141,10 @@ class MainActivity : ComponentActivity() {
                     gsmCmExportStatus = gsmCmExportStatus,
                     onLoadGsmCmExport = { uri -> viewModel.loadGsmCmExport(uri) },
                     onClearGsmCmExport = { viewModel.clearGsmCmExport() },
+                    widgetRefreshSeconds = widgetRefresh,
+                    onWidgetRefreshChange = { viewModel.setWidgetRefreshSeconds(it) },
+                    backgroundMonitoringEnabled = backgroundMonitoring,
+                    onBackgroundMonitoringChange = { viewModel.setBackgroundMonitoringEnabled(it) },
                     onBack = { nav.popBackStack() }
                 )
             }

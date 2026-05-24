@@ -31,6 +31,10 @@ fun SettingsScreen(
     gsmCmExportStatus: String,
     onLoadGsmCmExport: (Uri) -> Unit,
     onClearGsmCmExport: () -> Unit,
+    widgetRefreshSeconds: Int,
+    onWidgetRefreshChange: (Int) -> Unit,
+    backgroundMonitoringEnabled: Boolean,
+    onBackgroundMonitoringChange: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -72,6 +76,55 @@ fun SettingsScreen(
                         value = seconds.toFloat(),
                         onValueChange = { seconds = it.toInt() },
                         onValueChangeFinished = { onRefreshChange(seconds) },
+                        valueRange = SettingsRepository.MIN_REFRESH.toFloat()..SettingsRepository.MAX_REFRESH.toFloat(),
+                        steps = SettingsRepository.MAX_REFRESH - SettingsRepository.MIN_REFRESH - 1
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("1s", style = MaterialTheme.typography.labelSmall)
+                        Text("60s", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+
+            // Widget section
+            var widgetSecs by remember(widgetRefreshSeconds) { mutableIntStateOf(widgetRefreshSeconds) }
+
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Background Monitoring", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Keeps the home screen widget updated with live cell data. Shows a persistent notification.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = backgroundMonitoringEnabled, onCheckedChange = onBackgroundMonitoringChange)
+                    }
+                }
+            }
+
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Widget Refresh Rate", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "How often the home screen widget updates when background monitoring is on",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "$widgetSecs second${if (widgetSecs == 1) "" else "s"}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Slider(
+                        value = widgetSecs.toFloat(),
+                        onValueChange = { widgetSecs = it.toInt() },
+                        onValueChangeFinished = { onWidgetRefreshChange(widgetSecs) },
                         valueRange = SettingsRepository.MIN_REFRESH.toFloat()..SettingsRepository.MAX_REFRESH.toFloat(),
                         steps = SettingsRepository.MAX_REFRESH - SettingsRepository.MIN_REFRESH - 1
                     )
