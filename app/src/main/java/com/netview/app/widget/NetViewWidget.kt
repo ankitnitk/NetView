@@ -2,7 +2,6 @@ package com.netview.app.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.Preferences
@@ -24,6 +23,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.netview.app.MainActivity
+import com.netview.app.R
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,11 +43,11 @@ class NetViewWidget : GlanceAppWidget() {
         fun keyDl(slot: Int) = stringPreferencesKey("dl_$slot")
         fun keyLat(slot: Int) = stringPreferencesKey("lat_$slot")
 
-        // MD3-aligned day/night colours — no glance-material3 dependency needed
-        private val colorBg      = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFF1C1B1F))
-        private val colorPrimary = ColorProvider(day = Color(0xFF6650A4), night = Color(0xFFD0BCFF))
-        private val colorOnBg    = ColorProvider(day = Color(0xFF1C1B1F), night = Color(0xFFE6E1E5))
-        private val colorSubtle  = ColorProvider(day = Color(0xFF49454F), night = Color(0xFFCAC4D0))
+        // Resource-based day/night colours (values/colors.xml + values-night/colors.xml)
+        private val colorBg      = ColorProvider(R.color.widget_bg)
+        private val colorPrimary = ColorProvider(R.color.widget_primary)
+        private val colorOnBg    = ColorProvider(R.color.widget_on_bg)
+        private val colorSubtle  = ColorProvider(R.color.widget_subtle)
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
