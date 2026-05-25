@@ -132,6 +132,12 @@ fun SettingsScreen(
                         Text("1s", style = MaterialTheme.typography.labelSmall)
                         Text("60s", style = MaterialTheme.typography.labelSmall)
                     }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "The widget displays cellular signal only. Wi-Fi details are not shown.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 

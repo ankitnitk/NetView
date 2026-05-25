@@ -25,6 +25,7 @@ import com.netview.app.data.WifiRepository
 import com.netview.app.data.WifiState
 import com.netview.app.service.MonitoringService
 import com.netview.app.utils.DebugLog
+import com.netview.app.widget.WidgetWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -221,6 +222,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ulThroughputMbps = if (!wifiIsDataTransport && isDataSim) ulMbps else null,
                 latencyMs = if (!wifiIsDataTransport && isDataSim) _latencyMs.value else null,
                 timeOnCellSeconds = elapsed,
+            )
+        }
+
+        // Write widget from foreground — ViewModel has valid CI + loaded CMExport repos
+        val capturedSims = rawSims
+        val capturedDl = dlMbps
+        val capturedLat = _latencyMs.value
+        val capturedWifi = wifiIsDataTransport
+        val capturedSubId = defaultDataSubId
+        val capturedNow = now
+        viewModelScope.launch {
+            WidgetWriter.write(
+                context          = getApplication(),
+                sims             = capturedSims,
+                lteExport        = cmExportRepo,
+                wcdmaExport      = wcdmaCmRepo,
+                gsmExport        = gsmCmRepo,
+                isWifi           = capturedWifi,
+                dlMbps           = capturedDl,
+                latencyMs        = capturedLat,
+                defaultDataSubId = capturedSubId,
+                updatedMs        = capturedNow,
             )
         }
     }

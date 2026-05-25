@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.netview.app.data.SettingsRepository
 import com.netview.app.ui.theme.NetViewTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class NetViewWidgetConfigureActivity : ComponentActivity() {
@@ -36,78 +37,90 @@ class NetViewWidgetConfigureActivity : ComponentActivity() {
 
         val repo = SettingsRepository(applicationContext)
 
-        setContent {
-            NetViewTheme {
-                var bgEnabled by remember { mutableStateOf(false) }
+        lifecycleScope.launch {
+            if (repo.backgroundMonitoringEnabled.first()) {
+                // Already enabled — skip config screen, add widget immediately
+                setResult(RESULT_OK, Intent().apply {
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                })
+                finish()
+                return@launch
+            }
 
-                LaunchedEffect(Unit) {
-                    repo.backgroundMonitoringEnabled.collect { bgEnabled = it }
-                }
+            // Background monitoring is off — show config screen so user can enable it
+            setContent {
+                NetViewTheme {
+                    var bgEnabled by remember { mutableStateOf(false) }
 
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            "NetView Widget",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Shows live cell info for each SIM on your home screen.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(32.dp))
+                    LaunchedEffect(Unit) {
+                        repo.backgroundMonitoringEnabled.collect { bgEnabled = it }
+                    }
 
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        "Background Monitoring",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        "Required to keep the widget updated with live data",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Switch(
-                                    checked = bgEnabled,
-                                    onCheckedChange = { enabled ->
-                                        bgEnabled = enabled
-                                        lifecycleScope.launch {
-                                            repo.setBackgroundMonitoringEnabled(enabled)
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(32.dp))
-
-                        Button(
-                            onClick = {
-                                val resultIntent = Intent().apply {
-                                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                                }
-                                setResult(RESULT_OK, resultIntent)
-                                finish()
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Add Widget")
+                            Text(
+                                "NetView Widget",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Shows live cell info for each SIM on your home screen.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(32.dp))
+
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Background Monitoring",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            "Required to keep the widget updated with live data",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Switch(
+                                        checked = bgEnabled,
+                                        onCheckedChange = { enabled ->
+                                            bgEnabled = enabled
+                                            lifecycleScope.launch {
+                                                repo.setBackgroundMonitoringEnabled(enabled)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(32.dp))
+
+                            Button(
+                                onClick = {
+                                    val resultIntent = Intent().apply {
+                                        putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                                    }
+                                    setResult(RESULT_OK, resultIntent)
+                                    finish()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Add Widget")
+                            }
                         }
                     }
                 }
