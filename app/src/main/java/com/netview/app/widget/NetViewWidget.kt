@@ -136,10 +136,10 @@ class NetViewWidget : GlanceAppWidget() {
         val nrSig    = prefs[keyNrSig(slot)] ?: ""
 
         // Font scale: normal for single SIM, tighter for dual
-        val headerSp = if (compact) 10.sp else 11.sp
-        val cellSp   = if (compact) 12.sp else 14.sp
-        val sigSp    = if (compact) 10.sp else 12.sp
-        val metricSp = if (compact) 10.sp else 11.sp
+        val headerSp = if (compact) 12.sp else 14.sp
+        val cellSp   = if (compact) 14.sp else 17.sp
+        val sigSp    = if (compact) 12.sp else 14.sp
+        val metricSp = if (compact) 11.sp else 13.sp
 
         Column(
             modifier = modifier.fillMaxWidth()
@@ -164,7 +164,7 @@ class NetViewWidget : GlanceAppWidget() {
                 if (showRefresh) {
                     Text(
                         "  ↻",
-                        style = TextStyle(color = colorPrimary, fontSize = if (compact) 12.sp else 14.sp),
+                        style = TextStyle(color = colorPrimary, fontSize = if (compact) 14.sp else 16.sp),
                         modifier = GlanceModifier.clickable(actionRunCallback<WidgetRefreshCallback>())
                     )
                 }
@@ -214,12 +214,12 @@ class NetViewWidget : GlanceAppWidget() {
                     if (nrRow.isNotEmpty()) {
                         Text(
                             nrRow,
-                            style = TextStyle(color = colorSubtle, fontSize = 10.sp),
+                            style = TextStyle(color = colorSubtle, fontSize = 12.sp),
                             modifier = GlanceModifier.defaultWeight()
                         )
                     }
                     if (nrSig.isNotEmpty()) {
-                        Text(nrSig, style = TextStyle(color = colorOnBg, fontSize = 10.sp))
+                        Text(nrSig, style = TextStyle(color = colorOnBg, fontSize = 12.sp))
                     }
                 }
             }
@@ -228,7 +228,7 @@ class NetViewWidget : GlanceAppWidget() {
             if (!compact) Spacer(GlanceModifier.defaultWeight())
 
             // ── DL throughput + latency ────────────────────────────────────
-            if (!compact && (dl.isNotEmpty() || lat.isNotEmpty())) {
+            if (dl.isNotEmpty() || lat.isNotEmpty()) {
                 Row(
                     modifier = GlanceModifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
