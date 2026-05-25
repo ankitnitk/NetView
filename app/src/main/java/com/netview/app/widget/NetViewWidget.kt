@@ -101,10 +101,13 @@ class NetViewWidget : GlanceAppWidget() {
                             Spacer(GlanceModifier.fillMaxWidth().height(4.dp))
                         }
                         SimBlock(
-                            prefs    = prefs,
-                            slot     = slot,
+                            prefs       = prefs,
+                            slot        = slot,
                             showRefresh = slot == 0,
-                            compact  = compact
+                            compact     = compact,
+                            // defaultWeight() is a ColumnScope extension — must be called here,
+                            // inside the Column lambda, not inside SimBlock's body.
+                            modifier    = GlanceModifier.defaultWeight()
                         )
                     }
                 }
@@ -118,6 +121,7 @@ class NetViewWidget : GlanceAppWidget() {
         slot: Int,
         showRefresh: Boolean,
         compact: Boolean,
+        modifier: GlanceModifier = GlanceModifier,
     ) {
         val simLabel = prefs[keySim(slot)] ?: "SIM ${slot + 1}"
         val carrier  = prefs[keyCarrier(slot)] ?: ""
@@ -138,7 +142,7 @@ class NetViewWidget : GlanceAppWidget() {
         val metricSp = if (compact) 10.sp else 11.sp
 
         Column(
-            modifier = GlanceModifier.defaultWeight().fillMaxWidth()
+            modifier = modifier.fillMaxWidth()
         ) {
             // ── Header: carrier  |  RAT  band  ↻ ──────────────────────────
             Row(
