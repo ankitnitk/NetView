@@ -39,7 +39,11 @@ object WidgetWriter {
                     prefs[NetViewWidget.keySim(slot)] = "SIM ${sim.slotIndex + 1}"
                     prefs[NetViewWidget.keyCarrier(slot)] = sim.carrierName
                     prefs[NetViewWidget.keyRat(slot)] = sim.networkType
-                    prefs[NetViewWidget.keyCellLabel(slot)] = cellLabel(sim, lteExport, wcdmaExport, gsmExport)
+                    // Samsung returns CI=UNAVAILABLE from background services; skip the write so
+                    // the last good value (written by the foreground app) is preserved in the store.
+                    if (hasCellId(sim.servingCell)) {
+                        prefs[NetViewWidget.keyCellLabel(slot)] = cellLabel(sim, lteExport, wcdmaExport, gsmExport)
+                    }
                     prefs[NetViewWidget.keyBand(slot)] = sim.servingCell?.band ?: ""
                     prefs[NetViewWidget.keySigLine(slot)] = signalLine(sim.servingCell)
                     prefs[NetViewWidget.keyCa(slot)] =
@@ -47,11 +51,21 @@ object WidgetWriter {
 
                     // NR secondary cell (NSA mode)
                     val nr = sim.nrCell
-                    prefs[NetViewWidget.keyNrRow(slot)] = if (nr != null) buildString {
-                        nr.band?.let { append(it) }
-                        nr.gnbId?.let { if (isNotEmpty()) append(" · "); append("gNB $it") }
-                    } else ""
-                    prefs[NetViewWidget.keyNrSig(slot)] = signalLine(nr)
+                    if (nr == null) {
+                        prefs[NetViewWidget.keyNrRow(slot)] = ""
+                        prefs[NetViewWidget.keyNrSig(slot)] = ""
+                    } else {
+                        // Signal always available; NR identity (gnbId/band) may be null in background —
+                        // keep previous row content rather than overwriting with blank.
+                        prefs[NetViewWidget.keyNrSig(slot)] = signalLine(nr)
+                        val nrRowContent = buildString {
+                            nr.band?.let { append(it) }
+                            nr.gnbId?.let { if (isNotEmpty()) append(" · "); append("gNB $it") }
+                        }
+                        if (nrRowContent.isNotEmpty()) {
+                            prefs[NetViewWidget.keyNrRow(slot)] = nrRowContent
+                        }
+                    }
 
                     val showMetrics = !isWifi && isDataSim
                     prefs[NetViewWidget.keyDl(slot)] = if (showMetrics) dlMbps?.let { "DL %.1f Mbps".format(it) } ?: "" else ""
@@ -103,6 +117,17 @@ object WidgetWriter {
                 name ?: "LAC ${c.tac ?: "—"} / CI ${c.cellId ?: "—"}"
             }
             else -> c.rat
+        }
+    }
+
+    private fun hasCellId(c: ServingCellInfo?): Boolean {
+        if (c == null) return false
+        return when (c.rat) {
+            "LTE" -> c.enbId != null
+            "NR" -> c.gnbId != null
+            "WCDMA" -> c.cellId != null
+            "GSM" -> c.cellId != null
+            else -> false
         }
     }
 

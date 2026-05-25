@@ -12,8 +12,8 @@ android {
         applicationId = "com.netview.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "3.3.5"
+        versionCode = 18
+        versionName = "3.3.6"
         vectorDrawables { useSupportLibrary = true }
     }
 
