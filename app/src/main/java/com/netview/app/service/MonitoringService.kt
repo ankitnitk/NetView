@@ -21,6 +21,7 @@ import com.netview.app.data.SettingsRepository
 import com.netview.app.data.TelephonyRepository
 import com.netview.app.data.WcdmaCmRepository
 import com.netview.app.widget.WidgetWriter
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,6 +41,7 @@ class MonitoringService : Service() {
     private val wcdmaExport = WcdmaCmRepository()
     private val gsmExport = GsmCmRepository()
     private lateinit var settingsRepo: SettingsRepository
+    private val exportsReady = CompletableDeferred<Unit>()
 
     private data class TrafficSnapshot(val rx: Long, val tx: Long, val ms: Long, val isWifi: Boolean)
     private var lastTraffic: TrafficSnapshot? = null
@@ -93,7 +95,10 @@ class MonitoringService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_REFRESH_NOW) {
-            scope.launch { if (telephonyRepo.hasPermissions()) runRefresh() }
+            scope.launch {
+                exportsReady.await()
+                if (telephonyRepo.hasPermissions()) runRefresh()
+            }
         }
         return START_STICKY
     }
@@ -117,11 +122,13 @@ class MonitoringService : Service() {
             settingsRepo.gsmCmExportUri.first()?.let {
                 gsmExport.load(applicationContext, Uri.parse(it))
             }
+            exportsReady.complete(Unit)
         }
     }
 
     private fun startMonitoringLoop() {
         scope.launch {
+            exportsReady.await()
             var refreshMs = settingsRepo.widgetRefreshSeconds.first() * 1000L
             scope.launch { settingsRepo.widgetRefreshSeconds.collect { refreshMs = it * 1000L } }
             while (isActive) {
