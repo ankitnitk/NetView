@@ -135,13 +135,13 @@ object WidgetWriter {
         if (c == null) return ""
         return when (c.rat) {
             "LTE" -> buildList {
-                c.rsrp?.let { add("$it dBm") }
-                c.rsrq?.let { add("$it dB") }
+                c.rsrp?.let { add("RSRP $it") }
+                c.rsrq?.let { add("RSRQ $it") }
                 c.rssnr?.let { add("SINR $it dB") }
             }.joinToString("  ")
             "NR" -> buildList {
-                c.rsrp?.let { add("$it dBm") }
-                c.rsrq?.let { add("$it dB") }
+                c.rsrp?.let { add("RSRP $it") }
+                c.rsrq?.let { add("RSRQ $it") }
                 (c.ssSinr ?: c.csiSinr)?.let { add("SINR $it dB") }
             }.joinToString("  ")
             "WCDMA" -> buildList {

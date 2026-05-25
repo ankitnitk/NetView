@@ -45,7 +45,6 @@ class NetViewWidget : GlanceAppWidget() {
         fun keyNrRow(slot: Int)     = stringPreferencesKey("nr_row_$slot")
         fun keyNrSig(slot: Int)     = stringPreferencesKey("nr_sig_$slot")
 
-        // Resource-based day/night colours (values/colors.xml + values-night/colors.xml)
         private val colorBg      = ColorProvider(R.color.widget_bg)
         private val colorPrimary = ColorProvider(R.color.widget_primary)
         private val colorOnBg    = ColorProvider(R.color.widget_on_bg)
@@ -62,7 +61,7 @@ class NetViewWidget : GlanceAppWidget() {
     @Composable
     private fun Content(prefs: Preferences) {
         val simCount = (prefs[KEY_SIM_COUNT] ?: 0).coerceAtMost(2)
-        val context = LocalContext.current
+        val context  = LocalContext.current
 
         Box(
             modifier = GlanceModifier
@@ -72,40 +71,41 @@ class NetViewWidget : GlanceAppWidget() {
         ) {
             Column(
                 modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                // Header
-                Row(
-                    modifier = GlanceModifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "NetView",
-                        style = TextStyle(color = colorPrimary, fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                        modifier = GlanceModifier.defaultWeight()
-                    )
-                    Text(
-                        "↻",
-                        style = TextStyle(color = colorPrimary, fontSize = 14.sp),
-                        modifier = GlanceModifier.clickable(actionRunCallback<WidgetRefreshCallback>())
-                    )
-                }
-                Spacer(GlanceModifier.fillMaxWidth().height(4.dp))
-
                 if (simCount == 0) {
-                    Text(
-                        "No data — open NetView",
-                        style = TextStyle(color = colorSubtle, fontSize = 11.sp)
-                    )
+                    Spacer(GlanceModifier.defaultWeight())
+                    Row(
+                        modifier = GlanceModifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "No data — open NetView",
+                            style = TextStyle(color = colorSubtle, fontSize = 11.sp),
+                            modifier = GlanceModifier.defaultWeight()
+                        )
+                        Text(
+                            "↻",
+                            style = TextStyle(color = colorPrimary, fontSize = 14.sp),
+                            modifier = GlanceModifier.clickable(actionRunCallback<WidgetRefreshCallback>())
+                        )
+                    }
+                    Spacer(GlanceModifier.defaultWeight())
                 } else {
+                    val compact = simCount > 1
                     for (slot in 0 until simCount) {
                         if (slot > 0) {
                             Spacer(GlanceModifier.fillMaxWidth().height(4.dp))
                             Spacer(GlanceModifier.fillMaxWidth().height(1.dp).background(colorSubtle))
                             Spacer(GlanceModifier.fillMaxWidth().height(4.dp))
                         }
-                        SimBlock(prefs, slot)
+                        SimBlock(
+                            prefs    = prefs,
+                            slot     = slot,
+                            showRefresh = slot == 0,
+                            compact  = compact
+                        )
                     }
                 }
             }
@@ -113,7 +113,12 @@ class NetViewWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun SimBlock(prefs: Preferences, slot: Int) {
+    private fun SimBlock(
+        prefs: Preferences,
+        slot: Int,
+        showRefresh: Boolean,
+        compact: Boolean,
+    ) {
         val simLabel = prefs[keySim(slot)] ?: "SIM ${slot + 1}"
         val carrier  = prefs[keyCarrier(slot)] ?: ""
         val rat      = prefs[keyRat(slot)] ?: ""
@@ -126,64 +131,115 @@ class NetViewWidget : GlanceAppWidget() {
         val nrRow    = prefs[keyNrRow(slot)] ?: ""
         val nrSig    = prefs[keyNrSig(slot)] ?: ""
 
-        Column(modifier = GlanceModifier.fillMaxWidth()) {
-            // Row 1: SIM label · carrier  |  RAT  band
-            Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // Font scale: normal for single SIM, tighter for dual
+        val headerSp = if (compact) 10.sp else 11.sp
+        val cellSp   = if (compact) 12.sp else 14.sp
+        val sigSp    = if (compact) 10.sp else 12.sp
+        val metricSp = if (compact) 10.sp else 11.sp
+
+        Column(
+            modifier = GlanceModifier.defaultWeight().fillMaxWidth()
+        ) {
+            // ── Header: carrier  |  RAT  band  ↻ ──────────────────────────
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val headerLabel = if (compact) "$simLabel · $carrier" else carrier
                 Text(
-                    "$simLabel · $carrier",
-                    style = TextStyle(color = colorOnBg, fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                    headerLabel,
+                    style = TextStyle(color = colorOnBg, fontWeight = FontWeight.Medium, fontSize = headerSp),
                     modifier = GlanceModifier.defaultWeight()
                 )
                 if (rat.isNotEmpty()) {
-                    Text(rat, style = TextStyle(color = colorPrimary, fontSize = 10.sp))
+                    Text(rat, style = TextStyle(color = colorPrimary, fontWeight = FontWeight.Bold, fontSize = headerSp))
                 }
                 if (band.isNotEmpty()) {
-                    Text("  $band", style = TextStyle(color = colorSubtle, fontSize = 10.sp))
+                    Text("  $band", style = TextStyle(color = colorSubtle, fontSize = headerSp))
+                }
+                if (showRefresh) {
+                    Text(
+                        "  ↻",
+                        style = TextStyle(color = colorPrimary, fontSize = if (compact) 12.sp else 14.sp),
+                        modifier = GlanceModifier.clickable(actionRunCallback<WidgetRefreshCallback>())
+                    )
                 }
             }
-            // Row 2: cell/site name  |  CA
+
+            // ── Flexible gap: pushes cell name away from top ───────────────
+            if (!compact) Spacer(GlanceModifier.defaultWeight())
+            else Spacer(GlanceModifier.height(3.dp))
+
+            // ── Cell identity — primary focus ──────────────────────────────
             if (cell.isNotEmpty() || ca.isNotEmpty()) {
-                Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        cell,
-                        style = TextStyle(color = colorOnBg, fontSize = 10.sp),
+                        cell.ifEmpty { "—" },
+                        style = TextStyle(
+                            color = colorPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = cellSp
+                        ),
                         modifier = GlanceModifier.defaultWeight()
                     )
                     if (ca.isNotEmpty()) {
-                        Text("CA $ca", style = TextStyle(color = colorPrimary, fontSize = 10.sp))
+                        Text(
+                            ca,
+                            style = TextStyle(color = colorSubtle, fontSize = metricSp)
+                        )
                     }
                 }
             }
-            // Row 3: signal
+
+            // ── Signal metrics ─────────────────────────────────────────────
             if (sig.isNotEmpty()) {
-                Text(sig, style = TextStyle(color = colorOnBg, fontSize = 10.sp))
+                Spacer(GlanceModifier.height(2.dp))
+                Text(sig, style = TextStyle(color = colorOnBg, fontSize = sigSp))
             }
-            // Row 4: NR secondary cell (NSA)
-            if (nrRow.isNotEmpty() || nrSig.isNotEmpty()) {
-                Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+
+            // ── NR secondary row (NSA) ─────────────────────────────────────
+            if (!compact && (nrRow.isNotEmpty() || nrSig.isNotEmpty())) {
+                Spacer(GlanceModifier.height(1.dp))
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (nrRow.isNotEmpty()) {
                         Text(
                             nrRow,
-                            style = TextStyle(color = colorOnBg, fontSize = 10.sp),
+                            style = TextStyle(color = colorSubtle, fontSize = 10.sp),
                             modifier = GlanceModifier.defaultWeight()
                         )
                     }
                     if (nrSig.isNotEmpty()) {
-                        Text(nrSig, style = TextStyle(color = colorPrimary, fontSize = 10.sp))
+                        Text(nrSig, style = TextStyle(color = colorOnBg, fontSize = 10.sp))
                     }
                 }
             }
-            // Row 5: DL + latency
-            if (dl.isNotEmpty() || lat.isNotEmpty()) {
-                Row {
+
+            // ── Flexible gap: pushes DL/lat to bottom (single SIM only) ───
+            if (!compact) Spacer(GlanceModifier.defaultWeight())
+
+            // ── DL throughput + latency ────────────────────────────────────
+            if (!compact && (dl.isNotEmpty() || lat.isNotEmpty())) {
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (dl.isNotEmpty()) {
-                        Text(dl, style = TextStyle(color = colorPrimary, fontSize = 10.sp))
-                    }
-                    if (dl.isNotEmpty() && lat.isNotEmpty()) {
-                        Text("  ", style = TextStyle(color = colorOnBg, fontSize = 10.sp))
+                        Text(
+                            dl,
+                            style = TextStyle(color = colorPrimary, fontSize = metricSp),
+                            modifier = GlanceModifier.defaultWeight()
+                        )
+                    } else {
+                        Spacer(GlanceModifier.defaultWeight())
                     }
                     if (lat.isNotEmpty()) {
-                        Text(lat, style = TextStyle(color = colorOnBg, fontSize = 10.sp))
+                        Text(lat, style = TextStyle(color = colorSubtle, fontSize = metricSp))
                     }
                 }
             }
