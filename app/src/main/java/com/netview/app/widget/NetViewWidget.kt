@@ -64,18 +64,15 @@ class NetViewWidget : GlanceAppWidget() {
         val simCount = (prefs[KEY_SIM_COUNT] ?: 0).coerceAtMost(2)
         val context = LocalContext.current
 
-        // Box fills the whole widget area (makes the entire area tappable to open the app).
-        // Column has background + wraps to content height so there's no empty dark space
-        // below the content when the widget is placed in a larger cell area.
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
+                .background(colorBg)
                 .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
         ) {
             Column(
                 modifier = GlanceModifier
                     .fillMaxWidth()
-                    .background(colorBg)
                     .padding(horizontal = 8.dp, vertical = 6.dp)
             ) {
                 // Header
