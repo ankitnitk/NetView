@@ -39,6 +39,9 @@ class TelephonyRepository(private val context: Context) {
     private val _caFlow = MutableStateFlow<Map<Int, List<CarrierComponent>>>(emptyMap())
     val caFlow: StateFlow<Map<Int, List<CarrierComponent>>> = _caFlow
 
+    // Fresh cell infos from CellInfoListener callback (API 31+) — avoids stale getAllCellInfo() in background
+    private val cellInfoCache = mutableMapOf<Int, List<CellInfo>>()
+
     fun hasPrecisePermission(): Boolean =
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) true
         else ContextCompat.checkSelfPermission(
@@ -87,7 +90,10 @@ class TelephonyRepository(private val context: Context) {
         val serviceState: ServiceState? = try { tm.serviceState } catch (e: Exception) { null }
         val dataType = try { tm.dataNetworkType } catch (e: Exception) { TelephonyManager.NETWORK_TYPE_UNKNOWN }
 
-        val cellInfos = try { tm.allCellInfo ?: emptyList() } catch (e: Exception) { emptyList() }
+        // Use callback-cached cell infos (fresh, kept alive by CellInfoListener on API 31+).
+        // Fall back to the synchronous call on older APIs or before the first callback fires.
+        val cellInfos = cellInfoCache[sub.subscriptionId]
+            ?: try { tm.allCellInfo ?: emptyList() } catch (e: Exception) { emptyList() }
         // allCellInfo is tied to the active modem, not the SIM — both subs return the same list
         // on a single-modem device. Prefer per-SIM ServiceState.NetworkRegistrationInfo cellIdentity;
         // fall back to allCellInfo only when the SS path yields nothing.
@@ -443,11 +449,18 @@ class TelephonyRepository(private val context: Context) {
     private fun parseServingFromServiceState(tm: TelephonyManager, ss: ServiceState?): ServingCellInfo? {
         if (ss == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         val psInfo = try {
-            ss.networkRegistrationInfoList.firstOrNull { reg ->
+            val psWwan = ss.networkRegistrationInfoList.filter { reg ->
                 reg.domain == NetworkRegistrationInfo.DOMAIN_PS &&
                         reg.transportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN &&
                         reg.cellIdentity != null
             }
+            // On NSA (dataNetworkType == LTE), Samsung sometimes orders the NR entry first,
+            // losing the LTE anchor cell identity (eNB/LCR/CMExport). Prefer LTE explicitly.
+            val dataType = try { tm.dataNetworkType } catch (_: Exception) { TelephonyManager.NETWORK_TYPE_UNKNOWN }
+            if (dataType == TelephonyManager.NETWORK_TYPE_LTE)
+                psWwan.firstOrNull { it.cellIdentity is CellIdentityLte } ?: psWwan.firstOrNull()
+            else
+                psWwan.firstOrNull()
         } catch (e: Exception) { null } ?: return null
         val cellId = psInfo.cellIdentity ?: return null
         // tm.signalStrength is per-SIM (since tm was created with createForSubscriptionId)
@@ -716,13 +729,18 @@ class TelephonyRepository(private val context: Context) {
         }
         val tm = telephonyManager.createForSubscriptionId(subId)
 
-        val cb = object : TelephonyCallback(), TelephonyCallback.PhysicalChannelConfigListener {
+        val cb = object : TelephonyCallback(),
+            TelephonyCallback.PhysicalChannelConfigListener,
+            TelephonyCallback.CellInfoListener {
             override fun onPhysicalChannelConfigChanged(configs: MutableList<PhysicalChannelConfig>) {
                 tcFireCount[subId] = (tcFireCount[subId] ?: 0) + 1
                 DebugLog.i("TC", "fire sub=$subId configs=${configs.size}")
                 val list = configs.mapIndexed { idx, cfg -> physicalChannelToCarrier(idx, cfg) }
                 caCache[subId] = list
                 _caFlow.value = caCache.toMap()
+            }
+            override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>) {
+                cellInfoCache[subId] = cellInfo
             }
         }
         try {
