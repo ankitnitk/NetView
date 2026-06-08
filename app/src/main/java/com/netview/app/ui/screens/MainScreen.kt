@@ -24,6 +24,7 @@ fun MainScreen(
     sims: List<SimSlotData>,
     location: LocationData?,
     permissionsGranted: Boolean,
+    permanentlyDenied: Boolean = false,
     onRequestPermissions: () -> Unit,
     onOpenSettings: () -> Unit,
     cmExportLookup: ((Long?, Int?, String?, String?) -> CmExportCell?)? = null,
@@ -52,7 +53,7 @@ fun MainScreen(
             .padding(padding)) {
 
             if (!permissionsGranted) {
-                PermissionPrompt(onRequestPermissions)
+                PermissionPrompt(onRequestPermissions, permanentlyDenied)
                 return@Column
             }
             if (sims.isEmpty() && wifiState == null) {
@@ -138,7 +139,7 @@ private fun SimTab(
 }
 
 @Composable
-private fun PermissionPrompt(onRequest: () -> Unit) {
+private fun PermissionPrompt(onRequest: () -> Unit, permanentlyDenied: Boolean = false) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -156,8 +157,18 @@ private fun PermissionPrompt(onRequest: () -> Unit) {
                     "• Location — required by Android to expose cell IDs and for GPS coordinates",
             style = MaterialTheme.typography.bodyMedium
         )
+        if (permanentlyDenied) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Permissions were permanently denied. Tap below to open App Settings and grant them manually.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onRequest) { Text("Grant permissions") }
+        Button(onClick = onRequest) {
+            Text(if (permanentlyDenied) "Open Settings" else "Grant permissions")
+        }
     }
 }
 

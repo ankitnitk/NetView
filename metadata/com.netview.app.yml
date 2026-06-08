@@ -1,0 +1,55 @@
+Categories:
+  - Network
+
+License: MIT
+
+WebSite: https://ankitnitk.github.io/NetView/
+SourceCode: https://github.com/ankitnitk/NetView
+IssueTracker: https://github.com/ankitnitk/NetView/issues
+Changelog: https://github.com/ankitnitk/NetView/releases
+
+Name: NetView
+Summary: Detailed 4G/5G cell info, carrier aggregation, and Wi-Fi stats
+Description: |
+  NetView gives you a real-time, per-SIM view of every serving-cell parameter
+  your Android device exposes — no root, no hidden menus, no account required.
+
+  '''Cellular (per SIM)'''
+  * Network generation — 2G / 3G / 4G LTE / 5G NSA / 5G SA
+  * Serving cell — PCI, EARFCN / NR-ARFCN, eNB ID, Sector ID, TAC, band number
+  * Signal — RSRP, RSRQ, SINR, RSSI, CQI, Timing Advance
+  * Carrier Aggregation — PCell + SCells with per-CC band, bandwidth, PCI, and
+    frequency (Android 12+)
+  * Voice technology — VoLTE / VoNR / CS fallback, IMS registration state
+
+  '''Wi-Fi'''
+  * SSID, BSSID, channel, frequency, security type
+  * Link speed, RSSI, and latency ping to the gateway
+
+  '''Location'''
+  * GPS latitude, longitude, altitude, and accuracy
+
+  '''Multi-SIM'''
+  * Dedicated tab for each SIM slot; works correctly on DSDS devices
+
+  '''Privacy'''
+  No ads, no analytics, no account. The only network access is an ICMP/TCP ping
+  to your own Wi-Fi gateway for latency measurement.
+
+RepoType: git
+Repo: https://github.com/ankitnitk/NetView
+
+Builds:
+  - versionName: 3.4.2
+    versionCode: 21
+    commit: v3.4.2
+    subdir: app
+    gradle:
+      - release
+    prebuild: sed -i 's/signingConfig = signingConfigs.getByName("release")//'
+        build.gradle.kts
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+CurrentVersion: 3.4.2
+CurrentVersionCode: 21

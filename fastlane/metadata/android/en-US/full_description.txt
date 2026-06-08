@@ -1,0 +1,37 @@
+NetView gives you a real-time, per-SIM view of every serving-cell parameter your Android device exposes — no root, no hidden menus, no account.
+
+CELLULAR (per SIM)
+• Network generation — 2G / 3G / 4G LTE / 5G NSA / 5G SA
+• Serving cell — PCI, EARFCN / NR-ARFCN, eNB ID, Sector ID, TAC, Band number
+• Signal — RSRP, RSRQ, SINR, RSSI, CQI, Timing Advance
+• Carrier Aggregation — PCell + up to 4 SCells with per-CC band, bandwidth, PCI, and frequency (Android 12+)
+• Voice technology — VoLTE / VoNR / CS fallback, IMS registration state
+
+WI-FI
+• SSID, BSSID, channel, frequency, security type
+• Link speed, RSSI, and latency ping to the gateway
+
+LOCATION
+• GPS latitude, longitude, altitude, and accuracy
+
+MULTI-SIM
+• Dedicated tab for each SIM slot — works correctly on DSDS devices
+
+DESIGN
+• Material You — adaptive colours from your wallpaper
+• Configurable auto-refresh: 1 – 60 seconds
+• Share snapshot as plain text for easy bug reports
+• No ads, no tracking, no network calls
+
+PERMISSIONS USED
+• READ_PHONE_STATE / READ_PRECISE_PHONE_STATE — read cell parameters
+• ACCESS_FINE_LOCATION — required by Android to expose cell IDs
+• ACCESS_WIFI_STATE — read Wi-Fi details
+• INTERNET — latency ping to the Wi-Fi gateway only; no external servers contacted
+
+REQUIREMENTS
+• Android 8.0 (API 26) or later
+• A SIM card inserted (Wi-Fi tab is always visible even without a SIM)
+• Location permission granted at runtime
+
+NOTE: Carrier Aggregation details require Android 12+. SIB parameters (RS Power, P-Max, etc.) are not accessible via public Android APIs and are therefore not shown.

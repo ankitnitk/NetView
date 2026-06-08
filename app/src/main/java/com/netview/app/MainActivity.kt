@@ -1,7 +1,10 @@
 package com.netview.app
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -66,12 +69,32 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Pick up grants made via the system Settings screen
+        if (hasAllPermissions()) viewModel.onPermissionsGranted()
+    }
+
     private fun hasAllPermissions(): Boolean {
         val phone = checkSelfPermission(Manifest.permission.READ_PHONE_STATE) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
         val loc = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
         return phone && loc
+    }
+
+    private fun isPermPermanentlyDenied(): Boolean {
+        if (hasAllPermissions()) return false
+        return !shouldShowRequestPermissionRationale(Manifest.permission.READ_PHONE_STATE) &&
+               !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+    private fun openAppSettings() {
+        startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            }
+        )
     }
 
     @androidx.compose.runtime.Composable
@@ -92,14 +115,20 @@ class MainActivity : ComponentActivity() {
         val gsmCmExportStatus by viewModel.gsmCmExportStatus.collectAsState()
         val gsmCmExportLoaded by viewModel.gsmCmExportLoaded.collectAsState()
 
+        // Recomputed each recomposition — cheap and always current.
+        // true only after at least one prior denial (onCreate already attempted the dialog).
+        val permanentlyDenied = !permissionsGranted && isPermPermanentlyDenied()
+
         NavHost(navController = nav, startDestination = "main") {
             composable("main") {
                 MainScreen(
                     sims = sims,
                     location = location,
                     permissionsGranted = permissionsGranted,
+                    permanentlyDenied = permanentlyDenied,
                     onRequestPermissions = {
-                        permissionLauncher.launch(
+                        if (permanentlyDenied) openAppSettings()
+                        else permissionLauncher.launch(
                             arrayOf(
                                 Manifest.permission.READ_PHONE_STATE,
                                 Manifest.permission.ACCESS_FINE_LOCATION
