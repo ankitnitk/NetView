@@ -19,12 +19,9 @@ class SettingsRepository(private val context: Context) {
         private val CMEXPORT_URI = stringPreferencesKey("cmexport_uri")
         private val WCDMA_CMEXPORT_URI = stringPreferencesKey("wcdma_cmexport_uri")
         private val GSM_CMEXPORT_URI = stringPreferencesKey("gsm_cmexport_uri")
-        private val WIDGET_REFRESH_SECONDS = intPreferencesKey("widget_refresh_seconds")
-        private val BACKGROUND_MONITORING = booleanPreferencesKey("background_monitoring")
         const val DEFAULT_REFRESH = 2
         const val MIN_REFRESH = 1
         const val MAX_REFRESH = 60
-        const val DEFAULT_WIDGET_REFRESH = 5
     }
 
     val refreshSeconds: Flow<Int> = context.dataStore.data.map { prefs ->
@@ -45,14 +42,6 @@ class SettingsRepository(private val context: Context) {
 
     val gsmCmExportUri: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[GSM_CMEXPORT_URI]
-    }
-
-    val widgetRefreshSeconds: Flow<Int> = context.dataStore.data.map { prefs ->
-        prefs[WIDGET_REFRESH_SECONDS] ?: DEFAULT_WIDGET_REFRESH
-    }
-
-    val backgroundMonitoringEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[BACKGROUND_MONITORING] ?: false
     }
 
     suspend fun setRefreshSeconds(seconds: Int) {
@@ -82,12 +71,4 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setWidgetRefreshSeconds(seconds: Int) {
-        val clamped = seconds.coerceIn(MIN_REFRESH, MAX_REFRESH)
-        context.dataStore.edit { it[WIDGET_REFRESH_SECONDS] = clamped }
-    }
-
-    suspend fun setBackgroundMonitoringEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[BACKGROUND_MONITORING] = enabled }
-    }
 }
