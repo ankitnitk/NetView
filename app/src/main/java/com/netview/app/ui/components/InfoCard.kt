@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,6 +25,7 @@ fun InfoCard(
     rows: List<Pair<String, String>>,
     collapsible: Boolean = false,
     initiallyExpanded: Boolean = true,
+    valueColors: Map<String, Color> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
@@ -85,7 +87,7 @@ fun InfoCard(
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = valueColors[label] ?: MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }

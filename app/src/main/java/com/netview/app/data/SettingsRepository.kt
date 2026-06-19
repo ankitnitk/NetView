@@ -16,6 +16,9 @@ class SettingsRepository(private val context: Context) {
     companion object {
         private val REFRESH_SECONDS = intPreferencesKey("refresh_seconds")
         private val DEBUG_LOGGING = booleanPreferencesKey("debug_logging")
+        private val CELL_CHANGE_LOGGING = booleanPreferencesKey("cell_change_logging")
+        private val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+        private val STATUS_NOTIFICATION = booleanPreferencesKey("status_notification")
         private val CMEXPORT_URI = stringPreferencesKey("cmexport_uri")
         private val WCDMA_CMEXPORT_URI = stringPreferencesKey("wcdma_cmexport_uri")
         private val GSM_CMEXPORT_URI = stringPreferencesKey("gsm_cmexport_uri")
@@ -30,6 +33,18 @@ class SettingsRepository(private val context: Context) {
 
     val debugLoggingEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[DEBUG_LOGGING] ?: false
+    }
+
+    val cellChangeLoggingEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[CELL_CHANGE_LOGGING] ?: false
+    }
+
+    val keepScreenOn: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEEP_SCREEN_ON] ?: false
+    }
+
+    val statusNotificationEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[STATUS_NOTIFICATION] ?: false
     }
 
     val cmExportUri: Flow<String?> = context.dataStore.data.map { prefs ->
@@ -51,6 +66,18 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDebugLoggingEnabled(enabled: Boolean) {
         context.dataStore.edit { it[DEBUG_LOGGING] = enabled }
+    }
+
+    suspend fun setCellChangeLoggingEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[CELL_CHANGE_LOGGING] = enabled }
+    }
+
+    suspend fun setKeepScreenOn(enabled: Boolean) {
+        context.dataStore.edit { it[KEEP_SCREEN_ON] = enabled }
+    }
+
+    suspend fun setStatusNotificationEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[STATUS_NOTIFICATION] = enabled }
     }
 
     suspend fun setCmExportUri(uri: String?) {

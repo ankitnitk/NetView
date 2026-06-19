@@ -1,6 +1,9 @@
 package com.netview.app.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import com.netview.app.BuildConfig
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -10,8 +13,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.netview.app.data.SettingsRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,6 +27,12 @@ fun SettingsScreen(
     debugLoggingEnabled: Boolean,
     onDebugLoggingChange: (Boolean) -> Unit,
     onOpenDebugLog: () -> Unit,
+    cellChangeLoggingEnabled: Boolean,
+    onCellChangeLoggingChange: (Boolean) -> Unit,
+    keepScreenOn: Boolean,
+    onKeepScreenOnChange: (Boolean) -> Unit,
+    statusNotificationEnabled: Boolean,
+    onStatusNotificationChange: (Boolean) -> Unit,
     cmExportStatus: String,
     onLoadCmExport: (Uri) -> Unit,
     onClearCmExport: () -> Unit,
@@ -78,6 +89,73 @@ fun SettingsScreen(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("1s", style = MaterialTheme.typography.labelSmall)
                         Text("60s", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Keep Screen Awake", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Prevents the screen from sleeping while NetView is open. Useful during drive testing.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = keepScreenOn, onCheckedChange = onKeepScreenOnChange)
+                    }
+                }
+            }
+
+            val ctx = LocalContext.current
+            val notifLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { granted -> onStatusNotificationChange(granted) }
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Background Status Notification", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Shows a silent notification with the serving cell, signal, and CA count while the app is in the background. Best-effort — may pause if the system suspends the app.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = statusNotificationEnabled,
+                            onCheckedChange = { want ->
+                                if (want && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) !=
+                                    PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    onStatusNotificationChange(want)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Cell Change Log", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Records each serving-cell change (handover / reselection) with signal and GPS. A history icon appears on the main screen. Export as CSV for Excel.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = cellChangeLoggingEnabled, onCheckedChange = onCellChangeLoggingChange)
                     }
                 }
             }

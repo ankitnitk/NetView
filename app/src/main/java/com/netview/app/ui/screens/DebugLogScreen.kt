@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -28,27 +30,51 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DebugLogScreen(onBack: () -> Unit) {
-    val lines by DebugLog.lines.collectAsState()
+    val liveLines by DebugLog.lines.collectAsState()
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
 
-    // Auto-scroll to bottom on new lines
-    LaunchedEffect(lines.size) {
-        if (lines.isNotEmpty()) listState.animateScrollToItem(lines.size - 1)
+    // When paused, freeze the displayed list so the user can scroll and read without
+    // the view changing under them. Live logging continues in the background.
+    var paused by remember { mutableStateOf(false) }
+    var frozenLines by remember { mutableStateOf<List<String>>(emptyList()) }
+    val lines = if (paused) frozenLines else liveLines
+
+    // Follow the tail only when not paused AND the user is already near the bottom.
+    // If they scroll up to read, we stop chasing them to the bottom.
+    val atBottom by remember {
+        derivedStateOf {
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            last == null || last.index >= liveLines.size - 2
+        }
+    }
+    LaunchedEffect(liveLines.size) {
+        if (!paused && atBottom && liveLines.isNotEmpty()) {
+            listState.animateScrollToItem(liveLines.size - 1)
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Debug Log (${lines.size})") },
+                title = { Text("Debug Log (${lines.size})" + if (paused) " ⏸" else "") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        if (!paused) frozenLines = liveLines
+                        paused = !paused
+                    }) {
+                        Icon(
+                            if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (paused) "Resume" else "Pause"
+                        )
+                    }
                     TextButton(onClick = { exportLog(ctx, DebugLog.snapshot()) }) { Text("Export") }
                     TextButton(onClick = {
                         copyToClipboard(ctx, DebugLog.snapshot())

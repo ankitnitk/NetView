@@ -26,7 +26,7 @@ class LocationRepository(private val context: Context) {
     ) == PackageManager.PERMISSION_GRANTED
 
     @SuppressLint("MissingPermission")
-    fun start() {
+    fun start(intervalMs: Long = 1000L) {
         if (!hasPermission()) return
         if (listener != null) return
         val l = object : LocationListener {
@@ -39,10 +39,10 @@ class LocationRepository(private val context: Context) {
         listener = l
         try {
             if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, l, Looper.getMainLooper())
+                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, intervalMs, 0f, l, Looper.getMainLooper())
             }
             if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000L, 0f, l, Looper.getMainLooper())
+                lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, intervalMs, 0f, l, Looper.getMainLooper())
             }
             // Seed lastFix from cached
             lastFix = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)

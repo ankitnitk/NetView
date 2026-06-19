@@ -10,6 +10,8 @@ import android.os.Build
 import android.telephony.SubscriptionManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.netview.app.data.CellChangeEvent
+import com.netview.app.data.CellHistory
 import com.netview.app.data.CmExportCell
 import com.netview.app.data.CmExportRepository
 import com.netview.app.data.GsmCmCell
@@ -24,7 +26,9 @@ import com.netview.app.data.WcdmaCmRepository
 import com.netview.app.data.WifiRepository
 import com.netview.app.data.WifiState
 import com.netview.app.utils.DebugLog
+import com.netview.app.utils.StatusNotifier
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -84,6 +88,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val refreshSecondsFlow = settingsRepo.refreshSeconds
     val debugLoggingEnabledFlow = settingsRepo.debugLoggingEnabled
+    val cellChangeLoggingEnabledFlow = settingsRepo.cellChangeLoggingEnabled
+    val keepScreenOnFlow = settingsRepo.keepScreenOn
+    val statusNotificationEnabledFlow = settingsRepo.statusNotificationEnabled
+
+    @Volatile private var statusNotificationEnabled = false
 
     private var refreshSeconds = SettingsRepository.DEFAULT_REFRESH
 
@@ -98,6 +107,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // Cell time tracking: slotIndex → (cellKey, startTimeMs)
     private val cellKeyMap = mutableMapOf<Int, String>()
     private val cellStartMap = mutableMapOf<Int, Long>()
+    // Previous network type per slot, for the Cell Change Log's "from → to" transition.
+    private val lastNetworkTypeMap = mutableMapOf<Int, String>()
+
+    // Polling only runs while the UI is in the foreground (see start()/stop()).
+    // Avoids draining the battery by reading telephony + GPS when the app is hidden.
+    @Volatile private var isForeground = false
+    private var pollingJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -110,13 +126,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
-            while (isActive) {
-                refresh()
-                delay(refreshSeconds * 1000L)
-            }
+            settingsRepo.cellChangeLoggingEnabled.collect { CellHistory.enabled = it }
         }
         viewModelScope.launch {
-            telephonyRepo.caFlow.collect { if (telephonyRepo.hasPermissions()) refresh() }
+            settingsRepo.statusNotificationEnabled.collect { statusNotificationEnabled = it }
+        }
+        // Restore any persisted cell-change history from a previous session.
+        CellHistory.attach(app)
+        viewModelScope.launch {
+            telephonyRepo.caFlow.collect { if (isForeground && telephonyRepo.hasPermissions()) refresh() }
         }
         // Reload saved CMExport files on startup
         viewModelScope.launch {
@@ -144,8 +162,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onPermissionsGranted() {
         _permissionsGranted.value = true
-        locationRepo.start()
-        refresh()
+        start()
+    }
+
+    /** Called from the Activity's onResume — begin foreground polling. */
+    fun start() {
+        if (!telephonyRepo.hasPermissions()) return
+        _permissionsGranted.value = true
+        isForeground = true
+        StatusNotifier.cancel(getApplication<Application>()) // app visible — no need for the status notification
+        // GPS update interval tracks the refresh rate (min 1s) instead of always polling at 1s.
+        locationRepo.start((refreshSeconds.coerceAtLeast(1) * 1000L))
+        if (pollingJob?.isActive != true) {
+            pollingJob = viewModelScope.launch {
+                while (isActive) {
+                    refresh()
+                    delay(refreshSeconds * 1000L)
+                }
+            }
+        }
+    }
+
+    /**
+     * Called from the Activity's onStop. Normally stops polling to save battery, but
+     * keeps a best-effort poll alive when the background status notification is enabled.
+     */
+    fun stop() {
+        isForeground = false
+        if (statusNotificationEnabled) return // keep polling so the notification stays current
+        pollingJob?.cancel()
+        pollingJob = null
+        locationRepo.stop()
     }
 
     fun refresh() {
@@ -203,6 +250,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (key != null && key != cellKeyMap[idx]) {
                 cellKeyMap[idx] = key
                 cellStartMap[idx] = now
+                if (CellHistory.enabled) recordCellChange(sim, lastNetworkTypeMap[idx], now)
+                lastNetworkTypeMap[idx] = sim.networkType
             }
             val elapsed = if (key != null) (now - (cellStartMap[idx] ?: now)) / 1000L else null
             val isDataSim = defaultDataSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID
@@ -215,6 +264,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
+        // Best-effort background status notification (no foreground service).
+        if (statusNotificationEnabled && !isForeground) {
+            updateStatusNotification(rawSims, defaultDataSubId)
+        }
+    }
+
+    /** Build and post the silent background status notification for the data SIM. */
+    private fun updateStatusNotification(sims: List<SimSlotData>, dataSubId: Int) {
+        val sim = sims.firstOrNull { it.subId == dataSubId } ?: sims.firstOrNull() ?: return
+        val c = sim.servingCell
+        // Cell name from CM dump if loaded (LTE), else eNB/sector or CID.
+        val cellName = when {
+            c?.rat == "LTE" -> cmExportRepo.lookup(
+                c.enbId?.toInt() ?: -1, c.sectorId ?: -1,
+                sim.mcc?.toIntOrNull(), sim.mnc?.toIntOrNull()
+            )?.lncelName ?: c.enbId?.let { "eNB $it-${c.sectorId ?: "?"}" }
+            c != null -> c.cellId?.let { "CID $it" }
+            else -> null
+        }
+        val ccCount = sim.carrierAggregation.size
+        val title = buildString {
+            append(sim.networkType)
+            cellName?.let { append(" • ").append(it) }
+        }
+        val text = buildString {
+            c?.rsrp?.let { append("RSRP $it") }
+            c?.rsrq?.let { append("  RSRQ $it") }
+            (c?.rssnr ?: c?.ssSinr)?.let { append("  SINR $it") }
+            if (ccCount > 0) append("  •  ${ccCount}CC")
+            if (isEmpty()) append("No serving cell")
+        }
+        StatusNotifier.show(getApplication<Application>(), title, text)
     }
 
     private fun isWifiDataActive(): Boolean {
@@ -240,6 +321,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Build and store a Cell Change Log entry from the SIM's current serving cell. */
+    private fun recordCellChange(sim: SimSlotData, fromType: String?, now: Long) {
+        val c = sim.servingCell ?: return
+        val loc = _location.value
+        val arfcn = when (c.rat) {
+            "LTE" -> c.earfcn
+            "NR" -> c.nrarfcn
+            "WCDMA" -> c.uarfcn
+            "GSM" -> c.arfcn
+            else -> null
+        }
+        // Map each RAT's primary metrics onto the common rsrp/rsrq/sinr slots.
+        val rsrp = c.rsrp ?: c.rscp ?: c.rssi
+        val rsrq = c.rsrq ?: c.ecNo
+        val sinr = c.rssnr ?: c.ssSinr
+        CellHistory.record(
+            CellChangeEvent(
+                timestampMillis = now,
+                slotIndex = sim.slotIndex,
+                simLabel = sim.carrierName,
+                fromNetworkType = fromType,
+                networkType = sim.networkType,
+                rat = c.rat,
+                enbId = c.enbId ?: c.gnbId,
+                cellId = c.cellId,
+                sectorId = c.sectorId,
+                pci = c.pci,
+                tac = c.tac,
+                arfcn = arfcn,
+                band = c.band,
+                rsrp = rsrp,
+                rsrq = rsrq,
+                sinr = sinr,
+                latitude = loc?.latitude,
+                longitude = loc?.longitude,
+            )
+        )
+    }
+
     fun setRefreshSeconds(seconds: Int) {
         viewModelScope.launch { settingsRepo.setRefreshSeconds(seconds) }
     }
@@ -248,6 +368,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         DebugLog.enabled = enabled
         if (enabled) DebugLog.i("CFG", "Debug logging enabled (toggle)")
         viewModelScope.launch { settingsRepo.setDebugLoggingEnabled(enabled) }
+    }
+
+    fun setCellChangeLoggingEnabled(enabled: Boolean) {
+        CellHistory.enabled = enabled
+        viewModelScope.launch { settingsRepo.setCellChangeLoggingEnabled(enabled) }
+    }
+
+    fun setKeepScreenOn(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setKeepScreenOn(enabled) }
+    }
+
+    fun setStatusNotificationEnabled(enabled: Boolean) {
+        statusNotificationEnabled = enabled
+        viewModelScope.launch { settingsRepo.setStatusNotificationEnabled(enabled) }
+        if (!enabled) StatusNotifier.cancel(getApplication<Application>())
     }
 
     // 4G CMExport
@@ -351,5 +486,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         super.onCleared()
         locationRepo.stop()
         telephonyRepo.release()
+        StatusNotifier.cancel(getApplication<Application>())
     }
 }

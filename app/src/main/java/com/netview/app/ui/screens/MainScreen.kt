@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,6 +28,8 @@ fun MainScreen(
     permanentlyDenied: Boolean = false,
     onRequestPermissions: () -> Unit,
     onOpenSettings: () -> Unit,
+    cellLoggingEnabled: Boolean = false,
+    onOpenHistory: () -> Unit = {},
     cmExportLookup: ((Long?, Int?, String?, String?) -> CmExportCell?)? = null,
     cmExportLoaded: Boolean = false,
     cmNeighborLookup: ((Int, Int) -> CmExportCell?)? = null,
@@ -41,6 +44,11 @@ fun MainScreen(
             TopAppBar(
                 title = { Text("NetView") },
                 actions = {
+                    if (cellLoggingEnabled) {
+                        IconButton(onClick = onOpenHistory) {
+                            Icon(Icons.Default.History, contentDescription = "Cell History")
+                        }
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }

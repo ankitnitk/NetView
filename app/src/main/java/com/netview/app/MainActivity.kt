@@ -19,6 +19,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.netview.app.data.SettingsRepository
+import com.netview.app.ui.screens.CellHistoryScreen
 import com.netview.app.ui.screens.DebugLogScreen
 import com.netview.app.ui.screens.MainScreen
 import com.netview.app.ui.screens.SettingsScreen
@@ -71,8 +72,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Pick up grants made via the system Settings screen
-        if (hasAllPermissions()) viewModel.onPermissionsGranted()
+        // Start foreground polling (also picks up grants made via the system Settings screen).
+        if (hasAllPermissions()) viewModel.start()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Stop polling telephony + GPS while the app is in the background.
+        viewModel.stop()
     }
 
     private fun hasAllPermissions(): Boolean {
@@ -106,6 +113,9 @@ class MainActivity : ComponentActivity() {
         val permissionsGranted by viewModel.permissionsGranted.collectAsState()
         val refresh by viewModel.refreshSecondsFlow.collectAsState(initial = SettingsRepository.DEFAULT_REFRESH)
         val debugLogging by viewModel.debugLoggingEnabledFlow.collectAsState(initial = false)
+        val cellChangeLogging by viewModel.cellChangeLoggingEnabledFlow.collectAsState(initial = false)
+        val keepScreenOn by viewModel.keepScreenOnFlow.collectAsState(initial = false)
+        val statusNotification by viewModel.statusNotificationEnabledFlow.collectAsState(initial = false)
         val cmExportStatus by viewModel.cmExportStatus.collectAsState()
         val cmExportLoaded by viewModel.cmExportLoaded.collectAsState()
         val wcdmaCmExportStatus by viewModel.wcdmaCmExportStatus.collectAsState()
@@ -116,6 +126,12 @@ class MainActivity : ComponentActivity() {
         // Recomputed each recomposition — cheap and always current.
         // true only after at least one prior denial (onCreate already attempted the dialog).
         val permanentlyDenied = !permissionsGranted && isPermPermanentlyDenied()
+
+        // Keep the screen awake while the app is foreground, when enabled.
+        androidx.compose.runtime.LaunchedEffect(keepScreenOn) {
+            if (keepScreenOn) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
 
         NavHost(navController = nav, startDestination = "main") {
             composable("main") {
@@ -134,6 +150,8 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     onOpenSettings = { nav.navigate("settings") },
+                    cellLoggingEnabled = cellChangeLogging,
+                    onOpenHistory = { nav.navigate("cell_history") },
                     cmExportLookup = { enbId, sectorId, mcc, mnc ->
                         viewModel.lookupCmExport(enbId, sectorId, mcc, mnc)
                     },
@@ -159,6 +177,12 @@ class MainActivity : ComponentActivity() {
                     debugLoggingEnabled = debugLogging,
                     onDebugLoggingChange = { viewModel.setDebugLoggingEnabled(it) },
                     onOpenDebugLog = { nav.navigate("debug_log") },
+                    cellChangeLoggingEnabled = cellChangeLogging,
+                    onCellChangeLoggingChange = { viewModel.setCellChangeLoggingEnabled(it) },
+                    keepScreenOn = keepScreenOn,
+                    onKeepScreenOnChange = { viewModel.setKeepScreenOn(it) },
+                    statusNotificationEnabled = statusNotification,
+                    onStatusNotificationChange = { viewModel.setStatusNotificationEnabled(it) },
                     cmExportStatus = cmExportStatus,
                     onLoadCmExport = { uri -> viewModel.loadCmExport(uri) },
                     onClearCmExport = { viewModel.clearCmExport() },
@@ -173,6 +197,13 @@ class MainActivity : ComponentActivity() {
             }
             composable("debug_log") {
                 DebugLogScreen(onBack = { nav.popBackStack() })
+            }
+            composable("cell_history") {
+                CellHistoryScreen(
+                    sims = sims,
+                    initialSlot = sims.firstOrNull()?.slotIndex ?: 0,
+                    onBack = { nav.popBackStack() }
+                )
             }
         }
     }

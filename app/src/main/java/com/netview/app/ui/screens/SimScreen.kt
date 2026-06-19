@@ -27,6 +27,7 @@ import com.netview.app.ui.components.TechBadge
 import com.netview.app.utils.EarfcnUtils
 import com.netview.app.utils.Formatters
 import com.netview.app.utils.ShareFormatter
+import com.netview.app.utils.SignalQuality
 import kotlin.math.log10
 
 @Composable
@@ -161,6 +162,7 @@ fun SimScreen(
 
             // Signal
             val sig = mutableListOf<Pair<String, String>>()
+            val sigColors = mutableMapOf<String, androidx.compose.ui.graphics.Color>()
             when (c.rat) {
                 "LTE" -> {
                     sig += "RSRP" to Formatters.signedOrDash(c.rsrp, "dBm")
@@ -169,6 +171,9 @@ fun SimScreen(
                     sig += "RSSI" to Formatters.signedOrDash(c.rssi, "dBm")
                     sig += "CQI" to Formatters.intOrDash(c.cqi)
                     sig += "Timing Advance" to Formatters.intOrDash(c.timingAdvance)
+                    SignalQuality.rsrp(c.rsrp)?.let { sigColors["RSRP"] = it }
+                    SignalQuality.rsrq(c.rsrq)?.let { sigColors["RSRQ"] = it }
+                    SignalQuality.sinr(c.rssnr)?.let { sigColors["SINR (RSSNR)"] = it }
                 }
                 "NR" -> {
                     sig += "SS-RSRP" to Formatters.signedOrDash(c.rsrp, "dBm")
@@ -177,11 +182,19 @@ fun SimScreen(
                     sig += "CSI-RSRP" to Formatters.signedOrDash(c.csiRsrp, "dBm")
                     sig += "CSI-RSRQ" to Formatters.signedOrDash(c.csiRsrq, "dB")
                     sig += "CSI-SINR" to Formatters.signedOrDash(c.csiSinr, "dB")
+                    SignalQuality.rsrp(c.rsrp)?.let { sigColors["SS-RSRP"] = it }
+                    SignalQuality.rsrq(c.rsrq)?.let { sigColors["SS-RSRQ"] = it }
+                    SignalQuality.sinr(c.ssSinr)?.let { sigColors["SS-SINR"] = it }
+                    SignalQuality.rsrp(c.csiRsrp)?.let { sigColors["CSI-RSRP"] = it }
+                    SignalQuality.rsrq(c.csiRsrq)?.let { sigColors["CSI-RSRQ"] = it }
+                    SignalQuality.sinr(c.csiSinr)?.let { sigColors["CSI-SINR"] = it }
                 }
                 "WCDMA" -> {
                     sig += "RSCP" to Formatters.signedOrDash(c.rscp, "dBm")
                     sig += "Ec/No" to Formatters.signedOrDash(c.ecNo, "dB")
                     sig += "RSSI" to Formatters.signedOrDash(c.rssi, "dBm")
+                    SignalQuality.rscp(c.rscp)?.let { sigColors["RSCP"] = it }
+                    SignalQuality.ecNo(c.ecNo)?.let { sigColors["Ec/No"] = it }
                 }
                 "GSM" -> {
                     sig += "RSSI" to Formatters.signedOrDash(c.rssi, "dBm")
@@ -189,7 +202,7 @@ fun SimScreen(
                     sig += "Timing Advance" to Formatters.intOrDash(c.timingAdvance)
                 }
             }
-            InfoCard(title = "Signal", rows = sig)
+            InfoCard(title = "Signal", rows = sig, valueColors = sigColors)
         } ?: InfoCard(
             title = "Serving Cell",
             rows = listOf("Status" to "No cell info — check permissions")
@@ -211,7 +224,14 @@ fun SimScreen(
             nr.csiRsrp?.let { rows += "CSI-RSRP" to Formatters.signedOrDash(it, "dBm") }
             nr.csiRsrq?.let { rows += "CSI-RSRQ" to Formatters.signedOrDash(it, "dB") }
             nr.csiSinr?.let { rows += "CSI-SINR" to Formatters.signedOrDash(it, "dB") }
-            InfoCard(title = "5G NR Leg", rows = rows)
+            val nrColors = mutableMapOf<String, androidx.compose.ui.graphics.Color>()
+            SignalQuality.rsrp(nr.rsrp)?.let { nrColors["SS-RSRP"] = it }
+            SignalQuality.rsrq(nr.rsrq)?.let { nrColors["SS-RSRQ"] = it }
+            SignalQuality.sinr(nr.ssSinr)?.let { nrColors["SS-SINR"] = it }
+            SignalQuality.rsrp(nr.csiRsrp)?.let { nrColors["CSI-RSRP"] = it }
+            SignalQuality.rsrq(nr.csiRsrq)?.let { nrColors["CSI-RSRQ"] = it }
+            SignalQuality.sinr(nr.csiSinr)?.let { nrColors["CSI-SINR"] = it }
+            InfoCard(title = "5G NR Leg", rows = rows, valueColors = nrColors)
         }
 
         // Carrier Aggregation (LTE / NR only)

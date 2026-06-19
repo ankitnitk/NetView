@@ -1,5 +1,6 @@
 package com.netview.app.utils
 
+import com.netview.app.BuildConfig
 import com.netview.app.data.LocationData
 import com.netview.app.data.ServingCellInfo
 import com.netview.app.data.SimSlotData
@@ -153,7 +154,7 @@ object ShareFormatter {
             appendLine("Provider: ${loc.provider}")
         }
 
-        append("— NetView 1.1.0")
+        append("— NetView ${BuildConfig.VERSION_NAME}")
     }
 
     private fun dash(v: Long?): String =
