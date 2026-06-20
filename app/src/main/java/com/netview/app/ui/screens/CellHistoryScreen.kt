@@ -163,10 +163,11 @@ private fun EventCard(e: CellChangeEvent, label: String) {
             }
             // Line 4: RAG-coloured signal
             Spacer(Modifier.height(4.dp))
+            val dark = androidx.compose.foundation.isSystemInDarkTheme()
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Metric("RSRP", e.rsrp, SignalQuality.rsrp(e.rsrp))
-                Metric("RSRQ", e.rsrq, SignalQuality.rsrq(e.rsrq))
-                Metric("SINR", e.sinr, SignalQuality.sinr(e.sinr))
+                Metric("RSRP", e.rsrp, SignalQuality.rsrp(e.rsrp, dark))
+                Metric("RSRQ", e.rsrq, SignalQuality.rsrq(e.rsrq, dark))
+                Metric("SINR", e.sinr, SignalQuality.sinr(e.sinr, dark))
             }
         }
     }

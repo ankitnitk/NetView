@@ -44,6 +44,7 @@ fun SimScreen(
     modifier: Modifier = Modifier
 ) {
     val ctx = LocalContext.current
+    val dark = androidx.compose.foundation.isSystemInDarkTheme()
     Column(modifier = modifier.fillMaxSize()) {
         // Pinned header — always visible
         Row(
@@ -171,9 +172,9 @@ fun SimScreen(
                     sig += "RSSI" to Formatters.signedOrDash(c.rssi, "dBm")
                     sig += "CQI" to Formatters.intOrDash(c.cqi)
                     sig += "Timing Advance" to Formatters.intOrDash(c.timingAdvance)
-                    SignalQuality.rsrp(c.rsrp)?.let { sigColors["RSRP"] = it }
-                    SignalQuality.rsrq(c.rsrq)?.let { sigColors["RSRQ"] = it }
-                    SignalQuality.sinr(c.rssnr)?.let { sigColors["SINR (RSSNR)"] = it }
+                    SignalQuality.rsrp(c.rsrp, dark)?.let { sigColors["RSRP"] = it }
+                    SignalQuality.rsrq(c.rsrq, dark)?.let { sigColors["RSRQ"] = it }
+                    SignalQuality.sinr(c.rssnr, dark)?.let { sigColors["SINR (RSSNR)"] = it }
                 }
                 "NR" -> {
                     sig += "SS-RSRP" to Formatters.signedOrDash(c.rsrp, "dBm")
@@ -182,19 +183,19 @@ fun SimScreen(
                     sig += "CSI-RSRP" to Formatters.signedOrDash(c.csiRsrp, "dBm")
                     sig += "CSI-RSRQ" to Formatters.signedOrDash(c.csiRsrq, "dB")
                     sig += "CSI-SINR" to Formatters.signedOrDash(c.csiSinr, "dB")
-                    SignalQuality.rsrp(c.rsrp)?.let { sigColors["SS-RSRP"] = it }
-                    SignalQuality.rsrq(c.rsrq)?.let { sigColors["SS-RSRQ"] = it }
-                    SignalQuality.sinr(c.ssSinr)?.let { sigColors["SS-SINR"] = it }
-                    SignalQuality.rsrp(c.csiRsrp)?.let { sigColors["CSI-RSRP"] = it }
-                    SignalQuality.rsrq(c.csiRsrq)?.let { sigColors["CSI-RSRQ"] = it }
-                    SignalQuality.sinr(c.csiSinr)?.let { sigColors["CSI-SINR"] = it }
+                    SignalQuality.rsrp(c.rsrp, dark)?.let { sigColors["SS-RSRP"] = it }
+                    SignalQuality.rsrq(c.rsrq, dark)?.let { sigColors["SS-RSRQ"] = it }
+                    SignalQuality.sinr(c.ssSinr, dark)?.let { sigColors["SS-SINR"] = it }
+                    SignalQuality.rsrp(c.csiRsrp, dark)?.let { sigColors["CSI-RSRP"] = it }
+                    SignalQuality.rsrq(c.csiRsrq, dark)?.let { sigColors["CSI-RSRQ"] = it }
+                    SignalQuality.sinr(c.csiSinr, dark)?.let { sigColors["CSI-SINR"] = it }
                 }
                 "WCDMA" -> {
                     sig += "RSCP" to Formatters.signedOrDash(c.rscp, "dBm")
                     sig += "Ec/No" to Formatters.signedOrDash(c.ecNo, "dB")
                     sig += "RSSI" to Formatters.signedOrDash(c.rssi, "dBm")
-                    SignalQuality.rscp(c.rscp)?.let { sigColors["RSCP"] = it }
-                    SignalQuality.ecNo(c.ecNo)?.let { sigColors["Ec/No"] = it }
+                    SignalQuality.rscp(c.rscp, dark)?.let { sigColors["RSCP"] = it }
+                    SignalQuality.ecNo(c.ecNo, dark)?.let { sigColors["Ec/No"] = it }
                 }
                 "GSM" -> {
                     sig += "RSSI" to Formatters.signedOrDash(c.rssi, "dBm")
@@ -225,12 +226,12 @@ fun SimScreen(
             nr.csiRsrq?.let { rows += "CSI-RSRQ" to Formatters.signedOrDash(it, "dB") }
             nr.csiSinr?.let { rows += "CSI-SINR" to Formatters.signedOrDash(it, "dB") }
             val nrColors = mutableMapOf<String, androidx.compose.ui.graphics.Color>()
-            SignalQuality.rsrp(nr.rsrp)?.let { nrColors["SS-RSRP"] = it }
-            SignalQuality.rsrq(nr.rsrq)?.let { nrColors["SS-RSRQ"] = it }
-            SignalQuality.sinr(nr.ssSinr)?.let { nrColors["SS-SINR"] = it }
-            SignalQuality.rsrp(nr.csiRsrp)?.let { nrColors["CSI-RSRP"] = it }
-            SignalQuality.rsrq(nr.csiRsrq)?.let { nrColors["CSI-RSRQ"] = it }
-            SignalQuality.sinr(nr.csiSinr)?.let { nrColors["CSI-SINR"] = it }
+            SignalQuality.rsrp(nr.rsrp, dark)?.let { nrColors["SS-RSRP"] = it }
+            SignalQuality.rsrq(nr.rsrq, dark)?.let { nrColors["SS-RSRQ"] = it }
+            SignalQuality.sinr(nr.ssSinr, dark)?.let { nrColors["SS-SINR"] = it }
+            SignalQuality.rsrp(nr.csiRsrp, dark)?.let { nrColors["CSI-RSRP"] = it }
+            SignalQuality.rsrq(nr.csiRsrq, dark)?.let { nrColors["CSI-RSRQ"] = it }
+            SignalQuality.sinr(nr.csiSinr, dark)?.let { nrColors["CSI-SINR"] = it }
             InfoCard(title = "5G NR Leg", rows = rows, valueColors = nrColors)
         }
 
