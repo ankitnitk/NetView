@@ -202,6 +202,7 @@ class MainActivity : ComponentActivity() {
                 CellHistoryScreen(
                     sims = sims,
                     initialSlot = sims.firstOrNull()?.slotIndex ?: 0,
+                    cmName = { ev -> viewModel.cellNameFor(ev) },
                     onBack = { nav.popBackStack() }
                 )
             }

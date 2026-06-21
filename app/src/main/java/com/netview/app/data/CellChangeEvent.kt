@@ -20,6 +20,8 @@ data class CellChangeEvent(
     val tac: Int?,
     val arfcn: Int?,                // EARFCN/UARFCN/ARFCN/NRARFCN as applicable
     val band: String?,
+    val mcc: String? = null,        // for CM-dump cell-name lookup
+    val mnc: String? = null,
     val rsrp: Int?,                 // dBm (RSRP / SS-RSRP / RSCP for 3G / RSSI for 2G)
     val rsrq: Int?,                 // dB  (RSRQ / SS-RSRQ / Ec/No for 3G)
     val sinr: Int?,                 // dB  (RSSNR / SS-SINR)

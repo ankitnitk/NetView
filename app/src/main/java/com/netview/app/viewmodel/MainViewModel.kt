@@ -131,8 +131,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             settingsRepo.statusNotificationEnabled.collect { statusNotificationEnabled = it }
         }
-        // Restore any persisted cell-change history from a previous session.
-        CellHistory.attach(app)
         viewModelScope.launch {
             telephonyRepo.caFlow.collect { if (isForeground && telephonyRepo.hasPermissions()) refresh() }
         }
@@ -250,7 +248,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (key != null && key != cellKeyMap[idx]) {
                 cellKeyMap[idx] = key
                 cellStartMap[idx] = now
-                if (CellHistory.enabled) recordCellChange(sim, lastNetworkTypeMap[idx], now)
+                // Guard against DSDS bleed: on a single-modem dual-SIM device the
+                // non-data SIM can momentarily mirror the data SIM's serving cell.
+                // Skip logging when another SIM reports the same cell key this poll
+                // and this isn't the data SIM.
+                val bleedDuplicate = defaultDataSubId != SubscriptionManager.INVALID_SUBSCRIPTION_ID &&
+                    sim.subId != defaultDataSubId &&
+                    rawSims.any { it.slotIndex != idx && cellKey(it) == key }
+                if (CellHistory.enabled && !bleedDuplicate) {
+                    recordCellChange(sim, lastNetworkTypeMap[idx], now)
+                }
                 lastNetworkTypeMap[idx] = sim.networkType
             }
             val elapsed = if (key != null) (now - (cellStartMap[idx] ?: now)) / 1000L else null
@@ -351,6 +358,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 tac = c.tac,
                 arfcn = arfcn,
                 band = c.band,
+                mcc = sim.mcc,
+                mnc = sim.mnc,
                 rsrp = rsrp,
                 rsrq = rsrq,
                 sinr = sinr,
@@ -358,6 +367,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 longitude = loc?.longitude,
             )
         )
+    }
+
+    /**
+     * Resolve a friendly cell name from a loaded CM dump for a logged event,
+     * or null if not loaded / not found. Used by the Cell History screen's
+     * expandable rows.
+     */
+    fun cellNameFor(e: CellChangeEvent): String? {
+        val mcc = e.mcc?.toIntOrNull()
+        val mnc = e.mnc?.toIntOrNull()
+        return when (e.rat) {
+            "LTE" -> {
+                val enb = e.enbId?.toInt() ?: return null
+                val sector = e.sectorId ?: return null
+                cmExportRepo.lookup(enb, sector, mcc, mnc)?.lncelName
+            }
+            "WCDMA" -> {
+                val ci = e.cellId ?: return null
+                val rncId = (ci shr 16).toInt()
+                val wcelId = (ci and 0xFFFF).toInt()
+                wcdmaCmRepo.lookup(rncId, wcelId, e.arfcn, mcc, mnc)?.wcelName
+            }
+            "GSM" -> {
+                val lac = e.tac ?: return null
+                val cid = e.cellId?.toInt() ?: return null
+                gsmCmRepo.lookup(lac, cid, mcc, mnc)?.cellName
+            }
+            else -> null
+        }
     }
 
     fun setRefreshSeconds(seconds: Int) {

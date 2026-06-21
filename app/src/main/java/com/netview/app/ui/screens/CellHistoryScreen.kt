@@ -2,6 +2,7 @@ package com.netview.app.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +32,7 @@ import java.util.Locale
 fun CellHistoryScreen(
     sims: List<SimSlotData>,
     initialSlot: Int,
+    cmName: (CellChangeEvent) -> String? = { null },
     onBack: () -> Unit
 ) {
     val events by CellHistory.events.collectAsState()
@@ -92,7 +94,7 @@ fun CellHistoryScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 12.dp)
                 ) {
-                    items(shown) { e -> EventCard(e, slotLabel(e.slotIndex)) }
+                    items(shown) { e -> EventCard(e, slotLabel(e.slotIndex), cmName) }
                 }
             }
         }
@@ -102,12 +104,18 @@ fun CellHistoryScreen(
 private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
 
 @Composable
-private fun EventCard(e: CellChangeEvent, label: String) {
+private fun EventCard(e: CellChangeEvent, label: String, cmName: (CellChangeEvent) -> String?) {
+    var expanded by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        Column(Modifier.padding(12.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(12.dp)
+        ) {
             // Line 1: time • transition • identity
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -168,6 +176,18 @@ private fun EventCard(e: CellChangeEvent, label: String) {
                 Metric("RSRP", e.rsrp, SignalQuality.rsrp(e.rsrp, dark))
                 Metric("RSRQ", e.rsrq, SignalQuality.rsrq(e.rsrq, dark))
                 Metric("SINR", e.sinr, SignalQuality.sinr(e.sinr, dark))
+            }
+            // Expandable: cell name from a loaded CM dump (looked up on demand).
+            if (expanded) {
+                Spacer(Modifier.height(6.dp))
+                val name = cmName(e)
+                Text(
+                    text = name?.let { "Cell: $it" } ?: "Cell name: not found in CM dump",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = if (name != null) FontWeight.Medium else FontWeight.Normal,
+                    color = if (name != null) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
