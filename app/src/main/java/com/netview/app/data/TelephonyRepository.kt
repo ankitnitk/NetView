@@ -97,7 +97,13 @@ class TelephonyRepository(private val context: Context) {
         // allCellInfo is tied to the active modem, not the SIM — both subs return the same list
         // on a single-modem device. Prefer per-SIM ServiceState.NetworkRegistrationInfo cellIdentity;
         // fall back to allCellInfo only when the SS path yields nothing.
-        val serving0 = parseServingFromServiceState(tm, serviceState) ?: parseServingCell(cellInfos)
+        // Track the source: the per-SIM ServiceState path is trustworthy (genuinely this
+        // SIM's cell); the shared allCellInfo fallback is modem-wide and can "bleed" the
+        // other SIM's cell on single-modem DSDS. The Cell Change Log uses this to avoid
+        // logging bleed without mis-suppressing genuine same-operator co-location.
+        val servingFromSs = parseServingFromServiceState(tm, serviceState)
+        val serving0 = servingFromSs ?: parseServingCell(cellInfos)
+        val servingFromRegistration = servingFromSs != null
         // Samsung intermittently returns UNAVAILABLE for CellIdentityLte.ci in the ServiceState
         // path. The allCellInfo path uses a different modem code path and often has CI when SS
         // doesn't. Patch it in so eNB/LCR (and CMExport lookups) work reliably.
@@ -287,6 +293,7 @@ class TelephonyRepository(private val context: Context) {
             voiceTech = voiceTech,
             imsRegistered = volte || vonr,
             servingCell = servingEnriched,
+            servingFromRegistration = servingFromRegistration,
             nrCell = nrCellDisplay,
             carrierAggregation = ca,
             isNonTerrestrial = isNtn,

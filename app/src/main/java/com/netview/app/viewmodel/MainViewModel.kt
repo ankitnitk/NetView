@@ -249,11 +249,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 cellKeyMap[idx] = key
                 cellStartMap[idx] = now
                 // Guard against DSDS bleed: on a single-modem dual-SIM device the
-                // non-data SIM can momentarily mirror the data SIM's serving cell.
-                // Skip logging when another SIM reports the same cell key this poll
-                // and this isn't the data SIM.
-                val bleedDuplicate = defaultDataSubId != SubscriptionManager.INVALID_SUBSCRIPTION_ID &&
-                    sim.subId != defaultDataSubId &&
+                // non-data SIM can momentarily mirror the data SIM's serving cell via the
+                // shared allCellInfo fallback. Treat a change as bleed only when this SIM's
+                // cell did NOT come from its own registration AND another SIM reports the
+                // same cell this poll. Genuine same-operator co-location arrives via each
+                // SIM's own ServiceState, so it is never wrongly suppressed.
+                val bleedDuplicate = !sim.servingFromRegistration &&
                     rawSims.any { it.slotIndex != idx && cellKey(it) == key }
                 if (CellHistory.enabled && !bleedDuplicate) {
                     recordCellChange(sim, lastNetworkTypeMap[idx], now)

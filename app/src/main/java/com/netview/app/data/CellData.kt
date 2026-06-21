@@ -15,6 +15,9 @@ data class SimSlotData(
     val voiceTech: String,         // VoLTE / VoNR / CS
     val imsRegistered: Boolean,
     val servingCell: ServingCellInfo?,
+    // True when servingCell came from this SIM's own ServiceState (trustworthy);
+    // false when it fell back to shared allCellInfo (possible DSDS bleed).
+    val servingFromRegistration: Boolean = false,
     val nrCell: ServingCellInfo? = null,   // NR leg on NSA — shown alongside LTE anchor
     val carrierAggregation: List<CarrierComponent> = emptyList(),
     val isNonTerrestrial: Boolean = false, // true when device is on a satellite (NTN) cell
