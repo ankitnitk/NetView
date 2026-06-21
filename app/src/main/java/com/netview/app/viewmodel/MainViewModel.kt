@@ -385,9 +385,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             "WCDMA" -> {
                 val ci = e.cellId ?: return null
+                val uarfcn = e.arfcn ?: return null
                 val rncId = (ci shr 16).toInt()
                 val wcelId = (ci and 0xFFFF).toInt()
-                wcdmaCmRepo.lookup(rncId, wcelId, e.arfcn, mcc, mnc)?.wcelName
+                wcdmaCmRepo.lookup(rncId, wcelId, uarfcn, mcc, mnc)?.wcelName
             }
             "GSM" -> {
                 val lac = e.tac ?: return null
