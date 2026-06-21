@@ -2,6 +2,19 @@
 
 All notable changes to NetView are documented here.
 
+## v3.4.6
+
+**Cell Change Log**
+- Each entry is now tappable to expand and show the serving cell's name from a loaded CM dump (LTE/WCDMA/GSM).
+- Fixed a bug where one SIM's log showed the other SIM's cell changes on single-modem dual-SIM devices.
+- The log is now session-only (in-memory, last 200 changes) instead of persisting across days. CSV export is unchanged.
+
+**Display**
+- Brighter, higher-contrast quality colours on dark theme (especially green).
+
+**Under the hood**
+- Removed window attributes deprecated in Android 15 (edge-to-edge is handled at runtime).
+
 ## v3.4.5
 
 **Signal**
