@@ -18,6 +18,7 @@ import com.netview.app.data.GsmCmCell
 import com.netview.app.data.GsmCmRepository
 import com.netview.app.data.LocationData
 import com.netview.app.data.LocationRepository
+import com.netview.app.data.NeighborCell
 import com.netview.app.data.SettingsRepository
 import com.netview.app.data.SimSlotData
 import com.netview.app.data.TelephonyRepository
@@ -269,6 +270,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ulThroughputMbps = if (!wifiIsDataTransport && isDataSim) ulMbps else null,
                 latencyMs = if (!wifiIsDataTransport && isDataSim) _latencyMs.value else null,
                 timeOnCellSeconds = elapsed,
+                // Drop neighbours that are actually another SIM's serving cell bleeding
+                // through the shared allCellInfo on single-modem DSDS.
+                neighborCells = sim.neighborCells.filterNot { isBledNeighbour(it, sim, rawSims) },
+                interRatNeighborCells = sim.interRatNeighborCells.filterNot { isBledNeighbour(it, sim, rawSims) },
             )
         }
 
@@ -326,6 +331,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             "WCDMA" -> "WCDMA_${c.cellId}_${c.uarfcn}"
             "GSM" -> "GSM_${c.cellId}_${c.tac}"
             else -> null
+        }
+    }
+
+    /**
+     * True when a neighbour cell exactly matches another SIM's serving cell
+     * (same RAT + frequency + PCI/PSC). On single-modem DSDS the shared
+     * allCellInfo can surface the other SIM's serving cell as a "neighbour" of
+     * this one — drop those. (Trade-off: in same-operator co-location where the
+     * other SIM genuinely camps on this SIM's real neighbour, that cell is hidden
+     * here, but it is still visible on the other SIM's tab as its serving cell.)
+     */
+    private fun isBledNeighbour(n: NeighborCell, ownSim: SimSlotData, allSims: List<SimSlotData>): Boolean {
+        return allSims.any { other ->
+            if (other.subId == ownSim.subId) return@any false
+            val s = other.servingCell ?: return@any false
+            when (n.rat) {
+                "LTE" -> s.rat == "LTE" && n.pci != null && n.pci == s.pci &&
+                    n.earfcn != null && n.earfcn == s.earfcn
+                "WCDMA" -> s.rat == "WCDMA" && n.psc != null && n.psc == s.pci &&
+                    n.uarfcn != null && n.uarfcn == s.uarfcn
+                else -> false
+            }
         }
     }
 
