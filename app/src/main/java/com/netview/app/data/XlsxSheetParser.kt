@@ -84,12 +84,18 @@ internal object XlsxSheetParser {
         return result - 1
     }
 
-    /** Returns a Map<colName, cellValue> for each data row, using row 0 as header. */
+    /**
+     * Returns a Map<colName, cellValue> for each data row, using row 0 as header.
+     * Keys are case-insensitive so minor header re-casing in the export
+     * (e.g. "LNCEL Name" -> "LNCEL name") doesn't break column lookups.
+     */
     fun rowsToFieldMaps(rows: List<Map<Int, String>>): List<Map<String, String>> {
         if (rows.isEmpty()) return emptyList()
         val colMap = rows[0]
         return (1 until rows.size).map { i ->
-            rows[i].entries.associate { (col, value) -> (colMap[col] ?: "") to value }
+            val m = java.util.TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER)
+            rows[i].forEach { (col, value) -> m[colMap[col] ?: ""] = value }
+            m
         }
     }
 }

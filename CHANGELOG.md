@@ -5,7 +5,10 @@ All notable changes to NetView are documented here.
 ## v3.4.7
 
 **Compliance**
-- Target Android 16 (API level 36) to meet the Google Play target-API requirement. No functional changes; the app already handled the Android 16 edge-to-edge behaviour (see v3.4.6).
+- Target Android 16 (API level 36) to meet the Google Play target-API requirement. The app already handled the Android 16 edge-to-edge behaviour (see v3.4.6).
+
+**CM dump**
+- Support the updated 4G CMExport Summary format. The cell name now comes from the `LNCEL name` column (band + sector, e.g. `..._L8_A`). Column-header matching is now case-insensitive so minor header re-casing no longer breaks loading.
 
 ## v3.4.6
 

@@ -118,7 +118,10 @@ class CmExportRepository {
             val lnbtsId = fields["LNBTS ID"]?.toIntOrNull() ?: continue
             val lncelId = fields["LNCEL ID"]?.toIntOrNull() ?: continue
             val lnbtsName = fields["LNBTS Name"]?.takeIf { it.isNotBlank() } ?: continue
-            val lncelName = fields["LNCEL Name"]?.takeIf { it.isNotBlank() } ?: continue
+            // Newer exports renamed this column "LNCEL name" (band+sector, e.g.
+            // NAIROBI_KAWANGWARE_L8_A). Case-insensitive maps also match the older
+            // "LNCEL Name". The separate "Name" column (…_1 style) is intentionally not used.
+            val lncelName = fields["LNCEL name"]?.takeIf { it.isNotBlank() } ?: continue
             val site = siteMap[lnbtsId]
             result.add(CmExportCell(
                 lnbtsId = lnbtsId,
