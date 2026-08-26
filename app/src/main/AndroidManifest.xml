@@ -23,7 +23,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.NetView"
-        tools:targetApi="35">
+        tools:targetApi="36">
 
         <provider
             android:name="androidx.core.content.FileProvider"

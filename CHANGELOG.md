@@ -2,6 +2,11 @@
 
 All notable changes to NetView are documented here.
 
+## v3.4.7
+
+**Compliance**
+- Target Android 16 (API level 36) to meet the Google Play target-API requirement. No functional changes; the app already handled the Android 16 edge-to-edge behaviour (see v3.4.6).
+
 ## v3.4.6
 
 **Cell Change Log**

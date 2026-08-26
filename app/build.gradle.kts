@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.netview.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.netview.app"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 25
-        versionName = "3.4.6"
+        targetSdk = 36
+        versionCode = 26
+        versionName = "3.4.7"
         vectorDrawables { useSupportLibrary = true }
     }
 
